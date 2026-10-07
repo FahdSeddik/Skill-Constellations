@@ -1,0 +1,70 @@
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--sky); }
+.brand {
+  position: absolute; right: 22px; top: 20px; z-index: 3; pointer-events: none;
+  font-size: 11px; letter-spacing: 0.34em; text-transform: uppercase; color: var(--muted); opacity: 0.75;
+  text-shadow: 0 0 6px var(--sky), 0 0 2px var(--sky);
+}
+.caption {
+  position: absolute; left: 50%; bottom: calc(var(--dock, 96px) + 14px); z-index: 3; max-width: min(820px, 70vw); transform: translateX(-50%);
+  pointer-events: none; text-align: center; font-size: 13px; line-height: 1.45; color: var(--muted);
+  text-shadow: 0 0 8px var(--sky), 0 0 3px var(--sky); opacity: 0.95; transition: opacity 1600ms ease;
+}
+.caption.faded { opacity: 0; }
+.dock {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  background: linear-gradient(to bottom, transparent, var(--sky) 34px);
+}
+.legend {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; padding: 26px 22px 6px;
+  font-size: 12.5px; color: var(--muted); text-shadow: 0 0 6px var(--sky);
+}
+.legend .item { display: inline-flex; align-items: center; gap: 8px; }
+.legend canvas { width: 24px; height: 18px; }
+.controls { display: flex; align-items: center; gap: 16px; padding: 6px 22px 14px; }
+.play {
+  flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; padding: 0; cursor: pointer;
+  border: 1px solid var(--muted); background: transparent; color: var(--ink); display: grid; place-items: center;
+}
+.play:hover, .play:focus-visible { border-color: var(--ink); outline: none; }
+.play svg { width: 13px; height: 13px; fill: currentColor; }
+.speeds { flex: 0 0 auto; display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.speeds button {
+  background: transparent; border: 0; color: var(--muted); font: inherit; font-size: 12.5px;
+  padding: 5px 11px; cursor: pointer; font-variant-numeric: lining-nums;
+}
+.speeds button:hover { color: var(--ink); }
+.speeds button.on { color: var(--sky); background: var(--ink); }
+.scrub { flex: 1 1 auto; min-width: 80px; margin: 0; height: 22px; background: transparent; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.scrub:focus { outline: none; }
+.scrub::-webkit-slider-runnable-track {
+  height: 3px; border-radius: 3px;
+  background: linear-gradient(to right, var(--ink) 0 var(--done), var(--line) var(--done) 100%);
+}
+.scrub::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 13px; height: 13px; margin-top: -5px; border-radius: 50%;
+  background: var(--star); box-shadow: 0 0 10px var(--glow);
+}
+.scrub::-moz-range-track { height: 3px; border-radius: 3px; background: var(--line); }
+.scrub::-moz-range-progress { height: 3px; border-radius: 3px; background: var(--ink); }
+.scrub::-moz-range-thumb { width: 13px; height: 13px; border: 0; border-radius: 50%; background: var(--star); }
+.reset {
+  position: absolute; right: 18px; z-index: 3; padding: 5px 12px; border-radius: 999px;
+  font: inherit; font-size: 12.5px; color: var(--ink); background: var(--haze); border: 1px solid var(--line);
+  cursor: pointer; opacity: 0; pointer-events: none; transition: opacity 200ms ease;
+}
+.reset.on { opacity: 1; pointer-events: auto; }
+.reset:hover { border-color: var(--muted); }
+.tip {
+  position: absolute; z-index: 4; pointer-events: none; padding: 5px 9px; white-space: nowrap;
+  font-size: 12.5px; color: var(--ink); background: var(--haze); border: 1px solid var(--line);
+  border-radius: 6px; opacity: 0; transition: opacity 120ms ease;
+}
+.tip.on { opacity: 1; }
+.record, .record * { transition: none !important; animation: none !important; }
+.record .curve { position: absolute; left: 0; right: 0; bottom: 0; visibility: hidden; }
+.record.curved .curve { position: relative; visibility: visible; height: calc(156px * var(--ui, 1)); }
+.record .controls, .record .caption, .record .legend .toggles, .record .reset, .record .tip { display: none; }
+.record .hud, .record .legend { zoom: var(--ui, 1); }
+.record .legend { justify-content: center; }
+.record:not(.curved) .legend { padding-bottom: calc(54px / var(--ui, 1)); }
+.record .hud .title { font-size: 15px; color: var(--ink); }

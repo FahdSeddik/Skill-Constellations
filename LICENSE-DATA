@@ -1,0 +1,13 @@
+Data license
+
+The source code in this repository is released under the MIT License (see LICENSE).
+
+The derived data tables in this repository and in its data releases are
+released under the Creative Commons Attribution 4.0 International license
+(CC BY 4.0, https://creativecommons.org/licenses/by/4.0/).
+They derive from GitSkills (https://doi.org/10.5281/zenodo.21875637), which is
+also released under CC BY 4.0.
+
+When you reuse these tables, credit Fahd Seddik for the derived tables and
+cite GitSkills for the underlying data.
+The GitSkills database itself is not part of this repository.
