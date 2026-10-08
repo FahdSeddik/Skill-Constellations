@@ -1,0 +1,2243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--sky); }
+.brand {
+  position: absolute; right: 22px; top: 20px; z-index: 3; pointer-events: none;
+  font-size: 11px; letter-spacing: 0.34em; text-transform: uppercase; color: var(--muted); opacity: 0.75;
+  text-shadow: 0 0 6px var(--sky), 0 0 2px var(--sky);
+}
+.caption {
+  position: absolute; left: 50%; bottom: calc(var(--dock, 96px) + 14px); z-index: 3; max-width: min(820px, 70vw); transform: translateX(-50%);
+  pointer-events: none; text-align: center; font-size: 13px; line-height: 1.45; color: var(--muted);
+  text-shadow: 0 0 8px var(--sky), 0 0 3px var(--sky); opacity: 0.95; transition: opacity 1600ms ease;
+}
+.caption.faded { opacity: 0; }
+.dock {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  background: linear-gradient(to bottom, transparent, var(--sky) 34px);
+}
+.legend {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; padding: 26px 22px 6px;
+  font-size: 12.5px; color: var(--muted); text-shadow: 0 0 6px var(--sky);
+}
+.legend .item { display: inline-flex; align-items: center; gap: 8px; }
+.legend canvas { width: 24px; height: 18px; }
+.controls { display: flex; align-items: center; gap: 16px; padding: 6px 22px 14px; }
+.play {
+  flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; padding: 0; cursor: pointer;
+  border: 1px solid var(--muted); background: transparent; color: var(--ink); display: grid; place-items: center;
+}
+.play:hover, .play:focus-visible { border-color: var(--ink); outline: none; }
+.play svg { width: 13px; height: 13px; fill: currentColor; }
+.speeds { flex: 0 0 auto; display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.speeds button {
+  background: transparent; border: 0; color: var(--muted); font: inherit; font-size: 12.5px;
+  padding: 5px 11px; cursor: pointer; font-variant-numeric: lining-nums;
+}
+.speeds button:hover { color: var(--ink); }
+.speeds button.on { color: var(--sky); background: var(--ink); }
+.scrub { flex: 1 1 auto; min-width: 80px; margin: 0; height: 22px; background: transparent; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.scrub:focus { outline: none; }
+.scrub::-webkit-slider-runnable-track {
+  height: 3px; border-radius: 3px;
+  background: linear-gradient(to right, var(--ink) 0 var(--done), var(--line) var(--done) 100%);
+}
+.scrub::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 13px; height: 13px; margin-top: -5px; border-radius: 50%;
+  background: var(--star); box-shadow: 0 0 10px var(--glow);
+}
+.scrub::-moz-range-track { height: 3px; border-radius: 3px; background: var(--line); }
+.scrub::-moz-range-progress { height: 3px; border-radius: 3px; background: var(--ink); }
+.scrub::-moz-range-thumb { width: 13px; height: 13px; border: 0; border-radius: 50%; background: var(--star); }
+.reset {
+  position: absolute; right: 18px; z-index: 3; padding: 5px 12px; border-radius: 999px;
+  font: inherit; font-size: 12.5px; color: var(--ink); background: var(--haze); border: 1px solid var(--line);
+  cursor: pointer; opacity: 0; pointer-events: none; transition: opacity 200ms ease;
+}
+.reset.on { opacity: 1; pointer-events: auto; }
+.reset:hover { border-color: var(--muted); }
+.tip {
+  position: absolute; z-index: 4; pointer-events: none; padding: 5px 9px; white-space: nowrap;
+  font-size: 12.5px; color: var(--ink); background: var(--haze); border: 1px solid var(--line);
+  border-radius: 6px; opacity: 0; transition: opacity 120ms ease;
+}
+.tip.on { opacity: 1; }
+.record, .record * { transition: none !important; animation: none !important; }
+.record .curve { position: absolute; left: 0; right: 0; bottom: 0; visibility: hidden; }
+.record.curved .curve { position: relative; visibility: visible; height: calc(156px * var(--ui, 1)); }
+.record .controls, .record .caption, .record .legend .toggles, .record .reset, .record .tip { display: none; }
+.record .hud, .record .legend { zoom: var(--ui, 1); }
+.record .legend { justify-content: center; }
+.record:not(.curved) .legend { padding-bottom: calc(54px / var(--ui, 1)); }
+.record .hud .title { font-size: 15px; color: var(--ink); }
+
+.player {
+  position: fixed; inset: 0; overflow: hidden; background: var(--sky); color: var(--ink);
+  font-family: var(--font); user-select: none; opacity: 0; transition: opacity 700ms ease;
+}
+.player.ready { opacity: 1; }
+.panels { position: absolute; inset: 0; display: flex; cursor: grab; touch-action: none; }
+.panels.dragging { cursor: grabbing; }
+.reset { bottom: calc(var(--dock, 240px) + 10px); }
+.panel { position: relative; flex: 1 1 0; min-width: 0; }
+.panel + .panel { border-left: 1px solid var(--line); }
+.record .panel + .panel { border-left: 0; }
+.record .panel + .panel::after { content: ""; position: absolute; left: 0; top: 0; bottom: var(--room); width: 1px; background: var(--line); }
+.panel::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 116px; z-index: 1;
+  pointer-events: none; background: linear-gradient(to bottom, var(--sky) 0 48%, transparent); opacity: 0.92;
+}
+.panel canvas { position: absolute; inset: 0; width: 100%; height: 100%; transition: opacity 420ms ease; }
+.player.fading .panel canvas { opacity: 0; }
+.hud { position: absolute; left: 22px; top: 16px; z-index: 2; pointer-events: none; text-shadow: 0 0 6px var(--sky), 0 0 2px var(--sky); }
+.panel:first-child .hud { left: 68px; }
+.hud .title { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.hud .stamp { font-size: 25px; line-height: 1.25; font-variant-numeric: lining-nums tabular-nums; }
+.hud .note { font-size: 13px; color: var(--muted); min-height: 1.3em; font-variant-numeric: lining-nums tabular-nums; }
+.curve { position: relative; flex: 0 0 auto; height: 156px; border-top: 1px solid var(--line); }
+.curve canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: ew-resize; }
+</style>
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>openspec-apply-change | Skill Constellations</title><style>:root { --sky: #03050B; --haze: #0C1426; --star: #F5F7FF; --glow: #8DB3FF; --trail: #7393DC; --risk: #FF6B47; --mark: #F2C35A; --ink: #E8ECF5; --muted: #8892A8; --line: #1D2538; --label-font: 'Inter', 'Segoe UI', 'Helvetica Neue', 'DejaVu Sans', Arial, sans-serif; --menu-width: 280px; }
+.menu, .menu-toggle { font-family: var(--label-font); color: var(--ink); }
+.menu-toggle {
+  position: fixed; left: 14px; top: 14px; z-index: 20; width: 40px; height: 40px; padding: 0; cursor: pointer;
+  display: grid; place-items: center; background: var(--haze); border: 1px solid var(--line); border-radius: 8px;
+}
+.menu-toggle:hover, .menu-close:hover { border-color: var(--muted); }
+.menu-toggle svg, .menu-close svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+body.menu-open .menu-toggle { display: none; }
+.menu {
+  display: none; position: fixed; left: 0; top: 0; bottom: 0; width: var(--menu-width); z-index: 30; box-sizing: border-box;
+  flex-direction: column; gap: 22px; padding: 16px; overflow-y: auto; background: var(--sky); border-right: 1px solid var(--line);
+}
+body.menu-open .menu { display: flex; }
+body.menu-open .sky, body.menu-open .player { left: var(--menu-width); }
+.menu-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.menu-brand { display: flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font-size: 15px; font-weight: 600; }
+.menu-logo { width: 28px; height: 28px; flex: 0 0 auto; }
+.menu-close {
+  width: 34px; height: 34px; padding: 0; cursor: pointer; display: grid; place-items: center;
+  color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 8px;
+}
+.menu-link, .menu-links a { color: var(--ink); text-decoration: none; font-size: 14px; }
+.menu-link:hover, .menu-links a:hover { color: var(--glow); }
+.menu-section { display: flex; flex-direction: column; gap: 8px; }
+.menu-section h2 { margin: 0; font-size: 11px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.menu-picker {
+  width: 100%; padding: 8px 10px; font: inherit; font-size: 13.5px; color: var(--ink);
+  background: var(--haze); border: 1px solid var(--line); border-radius: 8px;
+}
+.menu-switch {
+  padding: 8px 12px; text-align: left; font: inherit; font-size: 13.5px; cursor: pointer;
+  color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 8px;
+}
+.menu-switch:hover { color: var(--ink); border-color: var(--muted); }
+.menu-switch[aria-pressed="true"] { color: var(--sky); background: var(--ink); border-color: var(--ink); }
+.menu-links { display: flex; gap: 18px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); }
+.sky .legend .toggle.names, .sky .brand, .player .brand { display: none; }
+@media (max-width: 720px) {
+  body.menu-open .sky, body.menu-open .player { left: 0; }
+  .clump { max-width: calc(100vw - 28px); overflow: hidden; text-overflow: ellipsis; box-sizing: border-box; }
+  .menu { width: min(300px, 86vw); box-shadow: 0 0 40px var(--sky); }
+}
+.record ~ .menu, .record ~ .menu-toggle { display: none; }
+</style></head>
+<body>
+<div id="player" class="player"></div>
+<script id="scene" type="application/json">{"nodes":{"spike":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"floor":[2.6,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"tint":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tip":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140,141,142,143,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159,160,161,162,163,164,165,166,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189,190,191,192,193,194,195,196,197,198,199,200,201,202,203,204,205,206,207,208,209,210,211,212,213,214,215,216,217,218,219,220,221,222,223,224,225,226,227,228,229,230,231,232,233,234,235,236,237,238,239,240,241,242,243,244,245,246,247,248,249,250,251,252,253,254,255,256,257,258,259,260,261,262,263,264,265,266,267,268,269,270,271,272,273,274,275,276,277,278,279,280,281,282,283,284,285,286,287,288,289,290,291,292,293,294,295,296,297,298,299,300,301,302,303,304,305,306,307,308,309,310,311,312,313,314,315,316,317,318,319,320,321,322,323,324,325,326,327,328,329,330,331,332,333,334,335,336,337,338,339,340,341,342,343,344,345,346,347,348,349,350,351,352,353,354,355,356,357,358,359,360,361,362,363,364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381,382,383,384,385,386,387,388,389,390,391,392,393,394,395,396,397,398,399,400,401,402,403,404,405,406,407,408,409,410,411,412,413,414,415,416,417,418,419,420,421,422,423,424,425,426,427,428,429,430,431,432,433,434,435,436,437,438,439,440,441,442,443,444,445,446,447,448,449,450,451,452,453,454,455,456,457,458,459,460,461,462,463,464,465,466,467,468,469,470,471,472,473,474,475,476,477,478,479,480,481,482,483,484,485,486,487,488,489,490,491,492,493,494,495,496,497,498,499,500,501,502,503,504,505,506,507,508,509,510,511,512,513,514,515,516,517,518,519,520,521,522,523,524,525,526,527,528,529,530,531,532,533,534,535,536,537,538,539,540,541,542,543,544,545,546,547,548,549,550,551,552,553,554,555,556,557,558,559,560,561,562,563,564,565,566,567,568,569,570,571,572,573,574,575,576,577,578,579,580,581,582,583,584,585,586,587,588,589,590,591,592,593,594,595,596,597,598,599,600,601,602,603,604,605,606,607,608,609,610,611,612,613,614,615,616,617,618,619,620,621,622,623,624,625,626,627,628,629,630,631,632,633,634,635,636,637,638,639,640,641,642,643,644,645,646,647,648,649,650,651,652,653,654,655,656,657,658,659,660,661,662,663,664,665,666,667,668,669,670,671,672,673,674,675,676,677,678,679,680,681,682,683,684,685,686,687,688,689,690,691,692,693,694,695,696,697,698,699,700,701,702,703,704,705,706,707,708,709,710,711,712,713,714,715,716,717,718,719,720,721,722,723,724,725,726,727,728,729,730,731,732,733,734,735,736,737,738,739,740,741,742,743,744,745,746,747,748,749,750,751,752,753,754,755,756,757,758,759,760,761,762,763,764,765,766,767,768,769,770,771,772,773,774,775,776,777,778,779,780,781,782,783,784,785,786,787,788,789,790,791,792,793,794,795,796,797,798,799,800,801,802,803,804,805,806,807,808,809,810,811,812,813,814,815,816,817,818,819,820,821,822,823,824,825,826,827,828,829,830,831,832,833,834,835,836,837,838,839,840,841,842,843,844,845,846,847,848,849,850,851,852,853,854,855,856,857,858,859,860,861,862,863,864,865,866,867,868,869,870,871,872,873,874,875,876,877,878,879,880,881,882,883,884,885,886,887,888,889,890,891,892,893,894,895,896,897,898,899,900,901,902,903,904,905,906,907,908,909,910,911,912,913,914,915,916,917,918,919,920,921,922,923,924,925,926,927,928,929,930,931,932,933,934,935,936,937,938,939,940,941,942,943,944,945,946,947,948,949,950,951,952,953,954,955,956,957,958,959],"tips":["Adopter 1, day 0.0, first adopter","Adopter 2, day 4.3","Adopter 3, day 4.5, copied from adopter 2","Adopter 4, day 4.5, copied from adopter 2","Adopter 5, day 4.8, copied from adopter 2","Adopter 6, day 4.9, copied from adopter 2","Adopter 7, day 4.9, copied from adopter 2","Adopter 8, day 4.9, copied from adopter 2","Adopter 9, day 5.0, copied from adopter 2","Adopter 10, day 5.5, copied from adopter 2","Adopter 11, day 5.9, copied from adopter 2","Adopter 12, day 6.2, copied from adopter 2","Adopter 13, day 6.2, copied from adopter 2","Adopter 14, day 6.2, copied from adopter 2","Adopter 15, day 6.2, copied from adopter 2","Adopter 16, day 6.6, copied from adopter 2","Adopter 17, day 6.8, copied from adopter 2","Adopter 18, day 6.8, copied from adopter 2","Adopter 19, day 6.8, copied from adopter 2","Adopter 20, day 7.2, copied from adopter 2","Adopter 21, day 7.2, copied from adopter 2","Adopter 22, day 7.2, copied from adopter 2","Adopter 23, day 7.3, copied from adopter 2","Adopter 24, day 7.3, copied from adopter 2","Adopter 25, day 7.4, copied from adopter 2","Adopter 26, day 7.4, copied from adopter 2","Adopter 27, day 7.5, copied from adopter 2","Adopter 28, day 7.9","Adopter 29, day 8.0, copied from adopter 2","Adopter 30, day 8.0, copied from adopter 2","Adopter 31, day 8.4, copied from adopter 2","Adopter 32, day 8.5, copied from adopter 2","Adopter 33, day 8.5, copied from adopter 2","Adopter 34, day 8.7, copied from adopter 2","Adopter 35, day 8.8","Adopter 36, day 8.8, copied from adopter 2","Adopter 37, day 8.8, copied from adopter 2","Adopter 38, day 9.0, copied from adopter 2","Adopter 39, day 9.2","Adopter 40, day 9.3, copied from adopter 2","Adopter 41, day 9.8, copied from adopter 2","Adopter 42, day 10.0, copied from adopter 2","Adopter 43, day 10.1, copied from adopter 2","Adopter 44, day 10.2","Adopter 45, day 10.5, copied from adopter 2","Adopter 46, day 10.5, copied from adopter 2","Adopter 47, day 10.7, copied from adopter 2","Adopter 48, day 11.1, copied from adopter 2","Adopter 49, day 11.2, copied from adopter 2","Adopter 50, day 11.6, copied from adopter 2","Adopter 51, day 11.7, copied from adopter 2","Adopter 52, day 11.7","Adopter 53, day 12.0, copied from adopter 2","Adopter 54, day 12.0, copied from adopter 1","Adopter 55, day 13.5, copied from adopter 2","Adopter 56, day 13.7, copied from adopter 2","Adopter 57, day 13.8","Adopter 58, day 13.9, copied from adopter 2","Adopter 59, day 13.9","Adopter 60, day 14.2, copied from adopter 2","Adopter 61, day 14.4, copied from adopter 2","Adopter 62, day 14.8, copied from adopter 2","Adopter 63, day 15.0","Adopter 64, day 15.2, copied from adopter 2","Adopter 65, day 15.3, copied from adopter 2","Adopter 66, day 15.7, copied from adopter 2","Adopter 67, day 15.9","Adopter 68, day 16.0, copied from adopter 2","Adopter 69, day 16.2, copied from adopter 1","Adopter 70, day 16.3, copied from adopter 2","Adopter 71, day 16.4, copied from adopter 2","Adopter 72, day 16.6, copied from adopter 2","Adopter 73, day 17.8, copied from adopter 2","Adopter 74, day 18.6, copied from adopter 2","Adopter 75, day 18.8, copied from adopter 2","Adopter 76, day 18.8, copied from adopter 2","Adopter 77, day 19.0","Adopter 78, day 19.1, copied from adopter 2","Adopter 79, day 19.2, copied from adopter 2","Adopter 80, day 19.4, copied from adopter 2","Adopter 81, day 19.4, copied from adopter 2","Adopter 82, day 19.5, copied from adopter 2","Adopter 83, day 19.7, copied from adopter 2","Adopter 84, day 19.8","Adopter 85, day 19.9, copied from adopter 2","Adopter 86, day 20.4, copied from adopter 75","Adopter 87, day 20.5, copied from adopter 2","Adopter 88, day 20.8, copied from adopter 2","Adopter 89, day 20.9, copied from adopter 2","Adopter 90, day 21.1","Adopter 91, day 21.6","Adopter 92, day 21.6, copied from adopter 2","Adopter 93, day 21.8, copied from adopter 2","Adopter 94, day 21.8, copied from adopter 2","Adopter 95, day 22.2, copied from adopter 2","Adopter 96, day 22.3, copied from adopter 2","Adopter 97, day 22.4, copied from adopter 2","Adopter 98, day 22.6","Adopter 99, day 22.6, copied from adopter 2","Adopter 100, day 22.9, copied from adopter 2","Adopter 101, day 23.1, copied from adopter 2","Adopter 102, day 23.3, copied from adopter 2","Adopter 103, day 23.7, copied from adopter 2","Adopter 104, day 24.4, copied from adopter 2","Adopter 105, day 25.2, copied from adopter 2","Adopter 106, day 25.7, copied from adopter 2","Adopter 107, day 26.9","Adopter 108, day 27.0, copied from adopter 2","Adopter 109, day 28.6","Adopter 110, day 28.6, copied from adopter 2","Adopter 111, day 28.7, copied from adopter 2","Adopter 112, day 29.0, copied from adopter 2","Adopter 113, day 29.1, copied from adopter 2","Adopter 114, day 29.2, copied from adopter 2","Adopter 115, day 29.6, copied from adopter 2","Adopter 116, day 30.0, copied from adopter 2","Adopter 117, day 30.0, copied from adopter 2","Adopter 118, day 30.3, copied from adopter 2","Adopter 119, day 30.6, copied from adopter 2","Adopter 120, day 30.9, copied from adopter 2","Adopter 121, day 30.9, copied from adopter 2","Adopter 122, day 30.9, copied from adopter 2","Adopter 123, day 31.3, copied from adopter 2","Adopter 124, day 31.9, copied from adopter 1","Adopter 125, day 32.1, copied from adopter 2","Adopter 126, day 32.5","Adopter 127, day 32.5, copied from adopter 2","Adopter 128, day 32.9, copied from adopter 2","Adopter 129, day 33.0, copied from adopter 1","Adopter 130, day 33.2, copied from adopter 2","Adopter 131, day 33.2, copied from adopter 2","Adopter 132, day 33.3, copied from adopter 2","Adopter 133, day 33.3, copied from adopter 2","Adopter 134, day 33.4, copied from adopter 2","Adopter 135, day 33.8","Adopter 136, day 33.9, copied from adopter 2","Adopter 137, day 34.1","Adopter 138, day 34.4","Adopter 139, day 34.6","Adopter 140, day 35.0","Adopter 141, day 35.4","Adopter 142, day 35.8","Adopter 143, day 36.0, copied from adopter 2","Adopter 144, day 36.2","Adopter 145, day 36.2","Adopter 146, day 36.4, copied from adopter 2","Adopter 147, day 36.7, copied from adopter 2","Adopter 148, day 36.9","Adopter 149, day 37.5, copied from adopter 2","Adopter 150, day 37.6","Adopter 151, day 37.9, copied from adopter 2","Adopter 152, day 38.4","Adopter 153, day 38.6, copied from adopter 2","Adopter 154, day 39.0","Adopter 155, day 40.4","Adopter 156, day 40.6","Adopter 157, day 40.6","Adopter 158, day 40.8, copied from adopter 2","Adopter 159, day 40.9","Adopter 160, day 40.9","Adopter 161, day 40.9","Adopter 162, day 41.1","Adopter 163, day 41.2, copied from adopter 2","Adopter 164, day 41.5, copied from adopter 2","Adopter 165, day 41.6","Adopter 166, day 41.6, copied from adopter 2","Adopter 167, day 41.9","Adopter 168, day 42.0","Adopter 169, day 42.4","Adopter 170, day 42.6","Adopter 171, day 42.9, copied from adopter 134","Adopter 172, day 43.0","Adopter 173, day 43.5, copied from adopter 2","Adopter 174, day 43.5","Adopter 175, day 43.7","Adopter 176, day 43.7","Adopter 177, day 43.9","Adopter 178, day 44.6","Adopter 179, day 45.4","Adopter 180, day 45.4, copied from adopter 2","Adopter 181, day 45.4, copied from adopter 2","Adopter 182, day 45.6, copied from adopter 2","Adopter 183, day 45.9, copied from adopter 2","Adopter 184, day 45.9, copied from adopter 2","Adopter 185, day 46.0","Adopter 186, day 46.1","Adopter 187, day 46.4","Adopter 188, day 46.8","Adopter 189, day 46.9","Adopter 190, day 46.9, copied from adopter 2","Adopter 191, day 46.9","Adopter 192, day 47.0","Adopter 193, day 47.2","Adopter 194, day 47.3","Adopter 195, day 47.5","Adopter 196, day 47.6","Adopter 197, day 47.7","Adopter 198, day 47.8","Adopter 199, day 48.5","Adopter 200, day 48.7","Adopter 201, day 48.7","Adopter 202, day 48.8","Adopter 203, day 48.9, copied from adopter 2","Adopter 204, day 49.2","Adopter 205, day 49.6","Adopter 206, day 49.9, copied from adopter 2","Adopter 207, day 50.3","Adopter 208, day 50.3","Adopter 209, day 50.3","Adopter 210, day 50.6, copied from adopter 4","Adopter 211, day 50.7","Adopter 212, day 51.1","Adopter 213, day 51.3","Adopter 214, day 51.4","Adopter 215, day 51.9, copied from adopter 2","Adopter 216, day 52.0","Adopter 217, day 52.0","Adopter 218, day 52.2","Adopter 219, day 52.3, copied from adopter 134","Adopter 220, day 52.8","Adopter 221, day 52.8","Adopter 222, day 53.4","Adopter 223, day 53.4","Adopter 224, day 53.6, copied from adopter 2","Adopter 225, day 53.6","Adopter 226, day 53.7","Adopter 227, day 53.8","Adopter 228, day 54.1","Adopter 229, day 54.1","Adopter 230, day 54.4, copied from adopter 122","Adopter 231, day 54.5","Adopter 232, day 55.1","Adopter 233, day 55.1","Adopter 234, day 55.1, copied from adopter 2","Adopter 235, day 55.2, copied from adopter 134","Adopter 236, day 55.5, copied from adopter 230","Adopter 237, day 55.5","Adopter 238, day 55.6","Adopter 239, day 55.9, copied from adopter 2","Adopter 240, day 56.0, copied from adopter 2","Adopter 241, day 56.7","Adopter 242, day 57.7","Adopter 243, day 57.8, copied from adopter 2","Adopter 244, day 58.0","Adopter 245, day 58.1, copied from adopter 134","Adopter 246, day 58.2, copied from adopter 2","Adopter 247, day 58.2","Adopter 248, day 58.4","Adopter 249, day 58.6, copied from adopter 134","Adopter 250, day 58.9","Adopter 251, day 59.1, copied from adopter 2","Adopter 252, day 59.3","Adopter 253, day 59.9","Adopter 254, day 60.0","Adopter 255, day 60.4","Adopter 256, day 60.5, copied from adopter 2","Adopter 257, day 60.5","Adopter 258, day 60.7, copied from adopter 2","Adopter 259, day 60.8","Adopter 260, day 61.5","Adopter 261, day 61.6","Adopter 262, day 61.8","Adopter 263, day 62.2","Adopter 264, day 62.2","Adopter 265, day 62.2","Adopter 266, day 62.3","Adopter 267, day 62.5","Adopter 268, day 62.6","Adopter 269, day 62.6","Adopter 270, day 62.6, copied from adopter 2","Adopter 271, day 63.0","Adopter 272, day 63.1","Adopter 273, day 63.6","Adopter 274, day 63.8","Adopter 275, day 63.8","Adopter 276, day 63.9","Adopter 277, day 64.2","Adopter 278, day 64.3","Adopter 279, day 64.5","Adopter 280, day 64.5, copied from adopter 2","Adopter 281, day 64.7","Adopter 282, day 64.9","Adopter 283, day 65.0, copied from adopter 2","Adopter 284, day 65.6","Adopter 285, day 65.7","Adopter 286, day 65.7","Adopter 287, day 66.0, copied from adopter 134","Adopter 288, day 66.1, copied from adopter 2","Adopter 289, day 66.2","Adopter 290, day 66.4, copied from adopter 134","Adopter 291, day 67.0","Adopter 292, day 67.1","Adopter 293, day 67.4","Adopter 294, day 67.5, copied from adopter 2","Adopter 295, day 67.8","Adopter 296, day 68.0","Adopter 297, day 68.7","Adopter 298, day 68.9","Adopter 299, day 69.0","Adopter 300, day 69.0, copied from adopter 2","Adopter 301, day 69.4, copied from adopter 2","Adopter 302, day 69.4","Adopter 303, day 69.4","Adopter 304, day 69.9","Adopter 305, day 70.4","Adopter 306, day 70.7","Adopter 307, day 71.2","Adopter 308, day 71.3","Adopter 309, day 71.5","Adopter 310, day 71.6, copied from adopter 134","Adopter 311, day 71.6, copied from adopter 2","Adopter 312, day 71.6, copied from adopter 183","Adopter 313, day 71.7","Adopter 314, day 71.7","Adopter 315, day 71.7","Adopter 316, day 71.8","Adopter 317, day 71.9, copied from adopter 2","Adopter 318, day 72.1","Adopter 319, day 72.3, copied from adopter 134","Adopter 320, day 72.5","Adopter 321, day 72.6","Adopter 322, day 72.8","Adopter 323, day 72.9, copied from adopter 4","Adopter 324, day 73.1, copied from adopter 2","Adopter 325, day 73.5","Adopter 326, day 73.9","Adopter 327, day 74.1","Adopter 328, day 74.2","Adopter 329, day 74.3","Adopter 330, day 74.4, copied from adopter 2","Adopter 331, day 74.4","Adopter 332, day 74.9, copied from adopter 2","Adopter 333, day 74.9","Adopter 334, day 75.3, copied from adopter 75","Adopter 335, day 75.4, copied from adopter 2","Adopter 336, day 75.5","Adopter 337, day 75.6","Adopter 338, day 75.6","Adopter 339, day 75.6","Adopter 340, day 76.3","Adopter 341, day 76.8","Adopter 342, day 76.8, copied from adopter 134","Adopter 343, day 77.0","Adopter 344, day 77.2","Adopter 345, day 77.4, copied from adopter 2","Adopter 346, day 77.4","Adopter 347, day 77.6","Adopter 348, day 77.6","Adopter 349, day 78.2","Adopter 350, day 78.3","Adopter 351, day 78.7, copied from adopter 2","Adopter 352, day 78.7","Adopter 353, day 78.9","Adopter 354, day 78.9","Adopter 355, day 79.1","Adopter 356, day 79.4, copied from adopter 183","Adopter 357, day 79.4","Adopter 358, day 79.4","Adopter 359, day 79.6","Adopter 360, day 79.8","Adopter 361, day 79.9","Adopter 362, day 79.9","Adopter 363, day 80.0, copied from adopter 2","Adopter 364, day 80.0","Adopter 365, day 80.2, copied from adopter 356","Adopter 366, day 80.2","Adopter 367, day 80.4","Adopter 368, day 80.5","Adopter 369, day 80.5","Adopter 370, day 80.7","Adopter 371, day 81.2","Adopter 372, day 81.4","Adopter 373, day 81.5","Adopter 374, day 81.6","Adopter 375, day 81.8","Adopter 376, day 82.0","Adopter 377, day 82.0","Adopter 378, day 82.2","Adopter 379, day 82.2","Adopter 380, day 82.5, copied from adopter 134","Adopter 381, day 82.8, copied from adopter 2","Adopter 382, day 82.8","Adopter 383, day 82.9, copied from adopter 2","Adopter 384, day 83.2","Adopter 385, day 83.4","Adopter 386, day 83.5","Adopter 387, day 83.5, copied from adopter 134","Adopter 388, day 83.6","Adopter 389, day 83.9","Adopter 390, day 84.0","Adopter 391, day 84.0","Adopter 392, day 84.0","Adopter 393, day 84.1","Adopter 394, day 84.1","Adopter 395, day 84.2, copied from adopter 325","Adopter 396, day 84.4","Adopter 397, day 84.4","Adopter 398, day 84.5","Adopter 399, day 84.5","Adopter 400, day 84.6","Adopter 401, day 84.6","Adopter 402, day 84.7","Adopter 403, day 84.9","Adopter 404, day 85.1","Adopter 405, day 85.1","Adopter 406, day 85.2","Adopter 407, day 85.5","Adopter 408, day 85.6","Adopter 409, day 85.7","Adopter 410, day 85.8, copied from adopter 134","Adopter 411, day 85.9, copied from adopter 4","Adopter 412, day 86.6","Adopter 413, day 86.6","Adopter 414, day 86.7","Adopter 415, day 86.8","Adopter 416, day 87.0","Adopter 417, day 87.4","Adopter 418, day 87.4","Adopter 419, day 87.5","Adopter 420, day 87.6","Adopter 421, day 87.6","Adopter 422, day 87.8, copied from adopter 2","Adopter 423, day 87.8","Adopter 424, day 87.9","Adopter 425, day 88.7","Adopter 426, day 89.5","Adopter 427, day 89.6","Adopter 428, day 89.6","Adopter 429, day 89.6","Adopter 430, day 89.6","Adopter 431, day 89.7","Adopter 432, day 89.8, copied from adopter 4","Adopter 433, day 89.8","Adopter 434, day 90.1","Adopter 435, day 90.2","Adopter 436, day 90.2","Adopter 437, day 90.3","Adopter 438, day 90.4","Adopter 439, day 90.4, copied from adopter 334","Adopter 440, day 90.7","Adopter 441, day 90.8","Adopter 442, day 91.0, copied from adopter 134","Adopter 443, day 91.1","Adopter 444, day 91.5","Adopter 445, day 91.8","Adopter 446, day 91.9","Adopter 447, day 92.2","Adopter 448, day 92.5","Adopter 449, day 92.7","Adopter 450, day 93.2","Adopter 451, day 93.3, copied from adopter 4","Adopter 452, day 93.7","Adopter 453, day 93.8, copied from adopter 2","Adopter 454, day 93.9","Adopter 455, day 94.0","Adopter 456, day 94.5, copied from adopter 273","Adopter 457, day 94.5","Adopter 458, day 94.7","Adopter 459, day 94.9, copied from adopter 2","Adopter 460, day 95.0","Adopter 461, day 95.0, copied from adopter 134","Adopter 462, day 95.0, copied from adopter 460","Adopter 463, day 95.1","Adopter 464, day 95.1","Adopter 465, day 95.7, copied from adopter 325","Adopter 466, day 96.4","Adopter 467, day 96.5","Adopter 468, day 97.3","Adopter 469, day 97.4, copied from adopter 2","Adopter 470, day 98.0","Adopter 471, day 98.2, copied from adopter 2","Adopter 472, day 98.6","Adopter 473, day 98.6, copied from adopter 2","Adopter 474, day 98.9","Adopter 475, day 99.0, copied from adopter 2","Adopter 476, day 99.0","Adopter 477, day 99.5","Adopter 478, day 100.4","Adopter 479, day 100.5","Adopter 480, day 100.7","Adopter 481, day 101.1, copied from adopter 134","Adopter 482, day 101.8","Adopter 483, day 101.8","Adopter 484, day 101.8, copied from adopter 134","Adopter 485, day 102.0, copied from adopter 2","Adopter 486, day 102.3","Adopter 487, day 102.6","Adopter 488, day 102.9","Adopter 489, day 103.1","Adopter 490, day 103.3","Adopter 491, day 103.5","Adopter 492, day 103.6","Adopter 493, day 103.6, copied from adopter 134","Adopter 494, day 103.9","Adopter 495, day 103.9, copied from adopter 2","Adopter 496, day 104.0","Adopter 497, day 104.0","Adopter 498, day 104.2, copied from adopter 2","Adopter 499, day 104.4","Adopter 500, day 104.8, copied from adopter 2","Adopter 501, day 105.4","Adopter 502, day 105.6","Adopter 503, day 105.6","Adopter 504, day 105.7, copied from adopter 134","Adopter 505, day 105.8","Adopter 506, day 105.9, copied from adopter 134","Adopter 507, day 106.3, copied from adopter 168","Adopter 508, day 106.4","Adopter 509, day 106.4","Adopter 510, day 106.5","Adopter 511, day 106.6","Adopter 512, day 106.8","Adopter 513, day 106.9","Adopter 514, day 106.9","Adopter 515, day 107.1","Adopter 516, day 107.3","Adopter 517, day 107.7","Adopter 518, day 108.0","Adopter 519, day 108.0","Adopter 520, day 108.1, copied from adopter 465","Adopter 521, day 108.1","Adopter 522, day 108.2","Adopter 523, day 108.6","Adopter 524, day 108.6","Adopter 525, day 109.2","Adopter 526, day 109.9","Adopter 527, day 109.9","Adopter 528, day 110.0, copied from adopter 2","Adopter 529, day 110.6","Adopter 530, day 110.7","Adopter 531, day 110.9","Adopter 532, day 110.9","Adopter 533, day 111.0","Adopter 534, day 111.0, copied from adopter 2","Adopter 535, day 111.1","Adopter 536, day 111.2","Adopter 537, day 111.4","Adopter 538, day 111.4","Adopter 539, day 111.6","Adopter 540, day 111.7","Adopter 541, day 112.4","Adopter 542, day 112.9","Adopter 543, day 113.1","Adopter 544, day 113.5, copied from adopter 2","Adopter 545, day 113.7, copied from adopter 409","Adopter 546, day 113.7","Adopter 547, day 113.9, copied from adopter 325","Adopter 548, day 113.9","Adopter 549, day 114.0, copied from adopter 134","Adopter 550, day 114.0","Adopter 551, day 114.5","Adopter 552, day 114.5","Adopter 553, day 114.6","Adopter 554, day 114.7","Adopter 555, day 114.9","Adopter 556, day 115.0, copied from adopter 547","Adopter 557, day 115.2","Adopter 558, day 115.2","Adopter 559, day 115.3","Adopter 560, day 115.7","Adopter 561, day 116.0","Adopter 562, day 116.1","Adopter 563, day 116.1, copied from adopter 2","Adopter 564, day 116.3, copied from adopter 168","Adopter 565, day 116.4","Adopter 566, day 116.6","Adopter 567, day 116.6","Adopter 568, day 116.6","Adopter 569, day 116.7","Adopter 570, day 116.7, copied from adopter 168","Adopter 571, day 117.0","Adopter 572, day 117.1","Adopter 573, day 117.5","Adopter 574, day 117.5, copied from adopter 168","Adopter 575, day 117.5","Adopter 576, day 117.6","Adopter 577, day 118.1","Adopter 578, day 118.4","Adopter 579, day 118.7","Adopter 580, day 118.8","Adopter 581, day 118.8","Adopter 582, day 118.9","Adopter 583, day 119.0","Adopter 584, day 119.1","Adopter 585, day 119.4","Adopter 586, day 119.5","Adopter 587, day 119.9","Adopter 588, day 120.2, copied from adopter 134","Adopter 589, day 120.6, copied from adopter 134","Adopter 590, day 120.7","Adopter 591, day 120.8","Adopter 592, day 120.8","Adopter 593, day 120.9","Adopter 594, day 121.0","Adopter 595, day 121.3","Adopter 596, day 121.5","Adopter 597, day 121.7","Adopter 598, day 121.7","Adopter 599, day 121.7, copied from adopter 134","Adopter 600, day 121.9","Adopter 601, day 121.9, copied from adopter 282","Adopter 602, day 121.9","Adopter 603, day 122.6","Adopter 604, day 122.9","Adopter 605, day 122.9","Adopter 606, day 123.3","Adopter 607, day 123.6","Adopter 608, day 123.6","Adopter 609, day 123.6","Adopter 610, day 123.8","Adopter 611, day 124.0","Adopter 612, day 124.0","Adopter 613, day 124.1","Adopter 614, day 124.4","Adopter 615, day 124.5","Adopter 616, day 124.6, copied from adopter 2","Adopter 617, day 124.6","Adopter 618, day 124.9, copied from adopter 189","Adopter 619, day 124.9","Adopter 620, day 125.8","Adopter 621, day 125.9","Adopter 622, day 126.0","Adopter 623, day 126.1","Adopter 624, day 126.9","Adopter 625, day 127.0","Adopter 626, day 127.2","Adopter 627, day 127.3, copied from adopter 2","Adopter 628, day 127.4","Adopter 629, day 127.5","Adopter 630, day 128.1","Adopter 631, day 128.3","Adopter 632, day 128.5","Adopter 633, day 128.7","Adopter 634, day 128.7","Adopter 635, day 128.8","Adopter 636, day 128.8","Adopter 637, day 129.0, copied from adopter 2","Adopter 638, day 129.3","Adopter 639, day 129.4","Adopter 640, day 129.9, copied from adopter 2","Adopter 641, day 130.0","Adopter 642, day 130.6","Adopter 643, day 131.2, copied from adopter 134","Adopter 644, day 131.6","Adopter 645, day 131.7","Adopter 646, day 131.8","Adopter 647, day 131.9","Adopter 648, day 131.9","Adopter 649, day 132.0","Adopter 650, day 132.1","Adopter 651, day 132.3","Adopter 652, day 132.4","Adopter 653, day 132.5, copied from adopter 4","Adopter 654, day 132.6","Adopter 655, day 132.6","Adopter 656, day 132.7, copied from adopter 4","Adopter 657, day 132.8","Adopter 658, day 132.9","Adopter 659, day 133.0","Adopter 660, day 133.0","Adopter 661, day 133.1","Adopter 662, day 133.1","Adopter 663, day 133.3","Adopter 664, day 133.5, copied from adopter 4","Adopter 665, day 133.6","Adopter 666, day 133.9","Adopter 667, day 133.9, copied from adopter 4","Adopter 668, day 133.9","Adopter 669, day 134.2, copied from adopter 2","Adopter 670, day 134.2","Adopter 671, day 134.4","Adopter 672, day 134.5, copied from adopter 4","Adopter 673, day 134.5","Adopter 674, day 134.6","Adopter 675, day 134.6","Adopter 676, day 134.8","Adopter 677, day 135.0","Adopter 678, day 135.1","Adopter 679, day 135.2, copied from adopter 2","Adopter 680, day 135.3, copied from adopter 4","Adopter 681, day 135.5, copied from adopter 2","Adopter 682, day 135.6","Adopter 683, day 136.1","Adopter 684, day 136.6","Adopter 685, day 136.7","Adopter 686, day 136.8","Adopter 687, day 136.8, copied from adopter 4","Adopter 688, day 136.9","Adopter 689, day 136.9, copied from adopter 4","Adopter 690, day 137.0","Adopter 691, day 137.0","Adopter 692, day 137.3, copied from adopter 230","Adopter 693, day 137.5","Adopter 694, day 137.9","Adopter 695, day 138.0","Adopter 696, day 138.6","Adopter 697, day 138.6","Adopter 698, day 138.7","Adopter 699, day 138.9","Adopter 700, day 138.9, copied from adopter 24","Adopter 701, day 138.9, copied from adopter 134","Adopter 702, day 139.0, copied from adopter 107","Adopter 703, day 139.1, copied from adopter 636","Adopter 704, day 139.1, copied from adopter 702","Adopter 705, day 139.2, copied from adopter 134","Adopter 706, day 139.2, copied from adopter 230","Adopter 707, day 139.6","Adopter 708, day 139.6","Adopter 709, day 139.8","Adopter 710, day 140.0","Adopter 711, day 140.0, copied from adopter 2","Adopter 712, day 140.4","Adopter 713, day 140.5, copied from adopter 107","Adopter 714, day 140.5","Adopter 715, day 140.7","Adopter 716, day 141.1","Adopter 717, day 141.2, copied from adopter 704","Adopter 718, day 141.5","Adopter 719, day 141.5","Adopter 720, day 141.7","Adopter 721, day 141.9","Adopter 722, day 142.2","Adopter 723, day 142.5","Adopter 724, day 142.8","Adopter 725, day 142.8","Adopter 726, day 143.1, copied from adopter 134","Adopter 727, day 143.2, copied from adopter 230","Adopter 728, day 143.6, copied from adopter 134","Adopter 729, day 143.9","Adopter 730, day 144.1, copied from adopter 4","Adopter 731, day 144.4","Adopter 732, day 144.4, copied from adopter 2","Adopter 733, day 144.5, copied from adopter 168","Adopter 734, day 144.7","Adopter 735, day 144.8, copied from adopter 2","Adopter 736, day 144.8","Adopter 737, day 145.1, copied from adopter 564","Adopter 738, day 145.3","Adopter 739, day 145.4","Adopter 740, day 145.9","Adopter 741, day 146.0, copied from adopter 2","Adopter 742, day 146.0, copied from adopter 2","Adopter 743, day 146.0","Adopter 744, day 146.1","Adopter 745, day 146.3, copied from adopter 1","Adopter 746, day 146.3","Adopter 747, day 146.8, copied from adopter 2","Adopter 748, day 146.9","Adopter 749, day 147.0","Adopter 750, day 147.0, copied from adopter 134","Adopter 751, day 147.1, copied from adopter 134","Adopter 752, day 147.2, copied from adopter 4","Adopter 753, day 147.7","Adopter 754, day 147.7","Adopter 755, day 147.8","Adopter 756, day 147.9, copied from adopter 134","Adopter 757, day 148.0","Adopter 758, day 148.2, copied from adopter 2","Adopter 759, day 148.4","Adopter 760, day 148.5, copied from adopter 134","Adopter 761, day 148.7","Adopter 762, day 148.8","Adopter 763, day 148.8","Adopter 764, day 148.9","Adopter 765, day 149.2","Adopter 766, day 149.3, copied from adopter 4","Adopter 767, day 149.4, copied from adopter 134","Adopter 768, day 149.4","Adopter 769, day 149.8","Adopter 770, day 151.0, copied from adopter 134","Adopter 771, day 151.0","Adopter 772, day 151.1, copied from adopter 2","Adopter 773, day 151.1, copied from adopter 168","Adopter 774, day 151.4","Adopter 775, day 151.4, copied from adopter 2","Adopter 776, day 151.6, copied from adopter 769","Adopter 777, day 151.7","Adopter 778, day 152.1","Adopter 779, day 152.1","Adopter 780, day 152.2","Adopter 781, day 152.2, copied from adopter 2","Adopter 782, day 152.2","Adopter 783, day 152.3, copied from adopter 4","Adopter 784, day 152.3","Adopter 785, day 152.5","Adopter 786, day 152.6","Adopter 787, day 152.7","Adopter 788, day 152.7","Adopter 789, day 152.8, copied from adopter 356","Adopter 790, day 152.8","Adopter 791, day 152.8","Adopter 792, day 153.1","Adopter 793, day 153.2","Adopter 794, day 153.3","Adopter 795, day 153.8","Adopter 796, day 154.1, copied from adopter 766","Adopter 797, day 154.3, copied from adopter 4","Adopter 798, day 154.5","Adopter 799, day 154.8","Adopter 800, day 154.9","Adopter 801, day 155.1","Adopter 802, day 155.1","Adopter 803, day 155.5","Adopter 804, day 156.0","Adopter 805, day 156.3","Adopter 806, day 156.5","Adopter 807, day 156.6","Adopter 808, day 156.6","Adopter 809, day 156.7, copied from adopter 2","Adopter 810, day 156.8","Adopter 811, day 156.9","Adopter 812, day 157.0","Adopter 813, day 157.1, copied from adopter 4","Adopter 814, day 157.1","Adopter 815, day 157.2","Adopter 816, day 157.4, copied from adopter 134","Adopter 817, day 157.5","Adopter 818, day 157.6","Adopter 819, day 157.7","Adopter 820, day 157.8","Adopter 821, day 157.8","Adopter 822, day 157.9, copied from adopter 632","Adopter 823, day 158.1, copied from adopter 134","Adopter 824, day 158.5","Adopter 825, day 158.6","Adopter 826, day 158.7, copied from adopter 4","Adopter 827, day 158.8","Adopter 828, day 158.8","Adopter 829, day 159.0","Adopter 830, day 159.0","Adopter 831, day 159.2","Adopter 832, day 159.4","Adopter 833, day 159.4, copied from adopter 4","Adopter 834, day 159.6","Adopter 835, day 159.6","Adopter 836, day 159.6","Adopter 837, day 159.8, copied from adopter 4","Adopter 838, day 159.9, copied from adopter 4","Adopter 839, day 160.0","Adopter 840, day 160.1, copied from adopter 134","Adopter 841, day 160.3","Adopter 842, day 160.4","Adopter 843, day 160.6","Adopter 844, day 160.7","Adopter 845, day 160.8","Adopter 846, day 160.9","Adopter 847, day 161.0","Adopter 848, day 161.0, copied from adopter 4","Adopter 849, day 161.5","Adopter 850, day 161.6","Adopter 851, day 161.7, copied from adopter 4","Adopter 852, day 161.8","Adopter 853, day 161.8","Adopter 854, day 161.8, copied from adopter 134","Adopter 855, day 161.9, copied from adopter 4","Adopter 856, day 162.0, copied from adopter 4","Adopter 857, day 162.0","Adopter 858, day 162.0, copied from adopter 2","Adopter 859, day 162.0","Adopter 860, day 162.4","Adopter 861, day 162.4, copied from adopter 134","Adopter 862, day 162.5","Adopter 863, day 162.5, copied from adopter 599","Adopter 864, day 163.0","Adopter 865, day 163.1","Adopter 866, day 163.2","Adopter 867, day 163.7","Adopter 868, day 163.7, copied from adopter 134","Adopter 869, day 164.0","Adopter 870, day 164.1","Adopter 871, day 164.1","Adopter 872, day 164.5","Adopter 873, day 164.8","Adopter 874, day 164.8","Adopter 875, day 164.8, copied from adopter 4","Adopter 876, day 164.9","Adopter 877, day 165.0, copied from adopter 4","Adopter 878, day 165.9, copied from adopter 745","Adopter 879, day 165.9","Adopter 880, day 166.3","Adopter 881, day 166.4","Adopter 882, day 166.7","Adopter 883, day 166.7","Adopter 884, day 167.2","Adopter 885, day 168.2, copied from adopter 4","Adopter 886, day 168.2, copied from adopter 134","Adopter 887, day 168.9","Adopter 888, day 169.0","Adopter 889, day 169.0","Adopter 890, day 169.6, copied from adopter 608","Adopter 891, day 169.7","Adopter 892, day 169.9, copied from adopter 134","Adopter 893, day 170.1","Adopter 894, day 170.1","Adopter 895, day 170.4, copied from adopter 134","Adopter 896, day 170.5","Adopter 897, day 170.5","Adopter 898, day 170.8, copied from adopter 134","Adopter 899, day 170.9","Adopter 900, day 171.2","Adopter 901, day 171.5, copied from adopter 134","Adopter 902, day 171.6","Adopter 903, day 171.8","Adopter 904, day 171.9, copied from adopter 4","Adopter 905, day 172.0","Adopter 906, day 172.1","Adopter 907, day 172.1","Adopter 908, day 172.2","Adopter 909, day 172.5","Adopter 910, day 172.6","Adopter 911, day 172.8","Adopter 912, day 172.8","Adopter 913, day 172.8","Adopter 914, day 173.5","Adopter 915, day 173.5","Adopter 916, day 173.5","Adopter 917, day 173.6","Adopter 918, day 173.7, copied from adopter 134","Adopter 919, day 173.7","Adopter 920, day 173.9","Adopter 921, day 173.9","Adopter 922, day 174.0, copied from adopter 134","Adopter 923, day 174.0","Adopter 924, day 174.2","Adopter 925, day 174.3","Adopter 926, day 174.4","Adopter 927, day 174.5","Adopter 928, day 174.6","Adopter 929, day 174.8","Adopter 930, day 174.9, copied from adopter 251","Adopter 931, day 175.1","Adopter 932, day 175.2","Adopter 933, day 175.2","Adopter 934, day 175.4","Adopter 935, day 175.6","Adopter 936, day 175.6","Adopter 937, day 175.7","Adopter 938, day 175.8","Adopter 939, day 175.9","Adopter 940, day 175.9","Adopter 941, day 176.6","Adopter 942, day 176.6","Adopter 943, day 176.8","Adopter 944, day 177.0, copied from adopter 861","Adopter 945, day 177.2, copied from adopter 2","Adopter 946, day 177.2","Adopter 947, day 177.3","Adopter 948, day 177.4","Adopter 949, day 177.4","Adopter 950, day 177.4","Adopter 951, day 178.0","Adopter 952, day 178.3","Adopter 953, day 178.5","Adopter 954, day 178.7","Adopter 955, day 178.7","Adopter 956, day 178.9","Adopter 957, day 179.2","Adopter 958, day 179.5","Adopter 959, day 179.6","Adopter 960, day 179.6"]},"keys":{"times":[0],"first":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"x":[0.0,0.1608,0.5004,0.5,0.4996,0.4991,0.4987,0.4982,0.4977,0.4971,0.4965,0.4959,0.4953,0.4946,0.494,0.4932,0.4925,0.4917,0.491,0.4901,0.4893,0.4884,0.4875,0.4866,0.4857,0.4847,0.4837,0.1594,0.4827,0.4816,0.4806,0.4795,0.4783,0.4772,0.1579,0.476,0.4748,0.4736,0.1565,0.4723,0.4711,0.4697,0.4684,0.1551,0.4671,0.4657,0.4643,0.4629,0.4614,0.4599,0.4584,0.1536,0.4569,0.1521,0.4553,0.4538,0.1507,0.4522,0.1492,0.4505,0.4489,0.4472,0.1477,0.4455,0.4438,0.4421,0.1462,0.4403,0.1447,0.4385,0.4367,0.4348,0.433,0.4311,0.4292,0.4273,0.1432,0.4253,0.4233,0.4213,0.4193,0.4173,0.4152,0.1417,0.4131,0.6452,0.411,0.4089,0.4067,0.1402,0.1386,0.4045,0.4023,0.4001,0.3979,0.3956,0.3933,0.1371,0.391,0.3887,0.3864,0.384,0.3816,0.3792,0.3768,0.3743,-0.0317,0.3719,-0.0335,0.3694,0.3669,0.3643,0.3618,0.3592,0.3566,0.354,0.3514,0.3488,0.3461,0.3434,0.3407,0.338,0.3353,-0.0353,0.3325,-0.0372,0.3298,0.327,-0.039,0.3242,0.3213,0.3185,0.3156,0.2662,-0.0408,0.2631,-0.0426,-0.0444,-0.0462,-0.048,-0.0499,-0.0517,0.2599,-0.0535,-0.0553,0.2567,0.2536,-0.057,0.2504,-0.0588,0.2472,-0.0606,0.244,-0.0624,-0.0642,-0.066,-0.0677,0.2408,-0.0695,-0.0713,-0.073,-0.0748,0.2375,0.2343,-0.0766,0.231,-0.0783,-0.08,-0.0818,-0.0835,0.5029,-0.0853,0.2277,-0.087,-0.0887,-0.0904,-0.0921,-0.0939,-0.0956,0.2244,0.2211,0.2178,0.1841,0.1807,-0.0973,-0.099,-0.1006,-0.1023,-0.104,0.1772,-0.1057,-0.1073,-0.109,-0.1107,-0.1123,-0.114,-0.1156,-0.1172,-0.1188,-0.1205,-0.1221,-0.1237,0.1738,-0.1253,-0.1269,0.1703,-0.1285,-0.13,-0.1316,0.7545,-0.1332,-0.1347,-0.1363,-0.1378,0.1669,-0.1394,-0.1409,-0.1424,0.4988,-0.1439,-0.1454,-0.1469,-0.1484,0.1634,-0.1499,-0.1514,-0.1528,-0.1543,-0.1557,0.507,-0.1572,-0.1586,-0.16,0.1599,0.4946,0.6841,-0.1614,-0.1629,0.1564,0.1529,-0.1643,-0.1656,0.1494,-0.167,0.4904,0.1459,-0.1684,-0.1698,0.4862,-0.1711,0.1424,-0.1725,-0.1738,-0.1751,-0.1764,0.1388,-0.1777,0.1353,-0.179,-0.1803,-0.1816,-0.1829,-0.1841,-0.1854,-0.1866,-0.1878,-0.1891,-0.1903,-0.1915,0.1317,-0.1927,-0.1938,-0.195,-0.1962,-0.1973,-0.1984,-0.1996,-0.2007,-0.2018,0.1282,-0.2029,-0.204,0.1246,-0.205,-0.2061,-0.2071,0.482,0.1211,-0.2082,0.4777,-0.2092,-0.2102,-0.2112,0.1175,-0.2122,-0.2132,-0.2142,-0.2151,-0.2161,0.1139,0.1103,-0.217,-0.2179,-0.2188,-0.2197,-0.2206,-0.2215,-0.2224,-0.2232,0.4735,0.1067,0.2787,-0.2241,-0.2249,-0.2257,-0.2265,0.1031,-0.2273,0.4691,-0.2281,-0.2289,-0.2296,0.7545,0.0995,-0.2304,-0.2311,-0.2318,-0.2325,-0.2332,0.0959,-0.2339,0.0923,-0.2346,0.6423,0.0887,-0.2352,-0.2359,-0.2365,-0.2371,-0.2377,-0.2383,0.4648,-0.2389,-0.2395,0.085,-0.24,-0.2406,-0.2411,-0.2416,-0.2421,0.0814,-0.2426,-0.2431,-0.2436,-0.244,0.2736,-0.2445,-0.2449,-0.2453,-0.2457,-0.2461,-0.2465,0.0778,-0.2468,0.3682,-0.2472,-0.2475,-0.2478,-0.2481,-0.2484,-0.2487,-0.249,-0.2492,-0.2495,-0.2497,-0.2499,-0.2501,-0.2503,-0.2505,0.4605,0.0741,-0.2506,0.0705,-0.2508,-0.2509,-0.251,0.4561,-0.2511,-0.2512,-0.2513,-0.2514,-0.2514,-0.2515,-0.2515,-0.4593,-0.2515,-0.2515,-0.2515,-0.2515,-0.2514,-0.2514,-0.2513,-0.2512,-0.2511,-0.251,-0.2509,-0.2508,-0.2506,-0.2505,0.4517,0.7545,-0.2503,-0.2501,-0.2499,-0.2497,-0.2494,-0.2492,-0.2489,-0.2487,-0.2484,-0.2481,0.0669,-0.2478,-0.2475,-0.2471,-0.2468,-0.2464,-0.246,-0.2457,-0.2453,-0.2448,0.7544,-0.2444,-0.244,-0.2435,-0.2431,-0.2426,-0.2421,0.8565,-0.2416,-0.2411,0.4472,-0.2405,-0.24,-0.2394,-0.2389,-0.2383,-0.2377,-0.2371,-0.2364,0.7542,-0.2358,0.0632,-0.2352,-0.2345,-0.39,-0.2338,-0.2332,0.0596,-0.2325,0.4428,-0.4649,-0.2317,-0.231,-0.4607,-0.2303,-0.2295,-0.2288,0.0559,-0.228,0.0522,-0.2272,0.0486,-0.2264,0.0449,-0.2256,-0.2248,-0.224,-0.2231,-0.2223,0.4383,-0.2214,-0.2205,0.4338,0.0413,-0.2197,-0.2188,-0.2178,-0.2169,-0.216,-0.215,-0.2141,0.4293,-0.2131,0.0376,-0.2121,-0.2111,0.0339,-0.2101,0.0302,-0.2091,-0.2081,-0.207,0.4247,-0.206,0.4201,-0.1513,-0.2049,-0.2038,-0.2028,-0.2017,-0.2006,-0.1994,-0.1983,-0.1972,-0.196,-0.1949,-0.1937,-0.1925,-0.6911,-0.1913,-0.1901,-0.1889,-0.1877,-0.1865,-0.1852,-0.184,0.0266,-0.1827,-0.1815,-0.1802,-0.1789,-0.1776,0.0229,-0.1763,-0.175,-0.1736,-0.1723,-0.171,-0.1696,-0.1682,-0.1669,-0.1655,0.0192,-0.5009,-0.1641,-0.4622,-0.1627,0.4155,-0.1613,-0.1599,-0.1585,-0.157,-0.1556,-0.1541,-0.6933,-0.1527,-0.1512,-0.1497,-0.1483,-0.1468,-0.1453,0.0155,-0.1549,-0.1438,-0.1422,-0.1407,-0.1392,-0.1377,-0.1584,-0.1361,-0.1346,-0.133,-0.1618,-0.1314,-0.1299,-0.1283,-0.1267,-0.1251,-0.1235,-0.1219,-0.1203,-0.1187,-0.1171,-0.1154,-0.1138,-0.1121,0.4109,0.4063,-0.1105,-0.1088,-0.1072,-0.1055,-0.1038,-0.1022,-0.1005,-0.0988,-0.0971,0.4016,-0.0954,-0.4079,-0.0937,-0.092,-0.0903,-0.0885,-0.0868,-0.0851,-0.0833,-0.0816,-0.0799,-0.0781,-0.0764,-0.0746,-0.0729,-0.0711,0.0119,-0.0693,-0.208,-0.0676,-0.0658,-0.064,-0.0622,-0.0604,-0.0586,-0.0569,-0.0551,0.0082,-0.0533,-0.0515,-0.0497,-0.0479,-0.0461,-0.0442,-0.0424,-0.0406,-0.0388,0.0045,-0.037,-0.0352,0.0008,-0.0333,-0.0315,0.3969,-0.0297,-0.0279,-0.026,-0.0242,-0.0224,-0.0205,-0.0187,-0.0169,-0.015,0.754,-0.0132,-0.0114,0.7538,-0.0095,-0.0077,-0.0058,-0.004,-0.0022,-0.0003,0.0015,0.7535,0.0034,0.0052,0.7532,0.007,-0.0029,0.0089,0.0107,0.7529,0.0126,0.0144,0.0162,0.0181,0.0199,0.0217,-0.0065,0.7525,-0.0102,0.0236,0.0254,0.0272,0.0291,0.0309,0.7521,0.0327,0.7516,0.0345,0.0364,0.6787,0.0382,0.04,0.0418,0.0436,0.0454,0.0472,0.049,0.7299,0.3922,-0.0616,-0.0776,-0.0924,0.3875,0.6733,0.0509,0.0527,0.0544,0.0562,-0.0139,0.058,-0.0652,0.0598,0.0616,0.0634,-0.1232,0.0652,0.0669,0.0687,0.0705,0.0722,0.074,0.0758,0.0775,0.3827,0.6678,0.378,0.0793,0.7511,0.081,-0.0176,-0.1653,0.0828,-0.0212,0.0845,-0.2323,0.0862,0.0879,0.0897,-0.0249,-0.0286,0.0914,0.0931,0.0948,0.0965,-0.0323,0.0982,0.0999,0.3732,0.3684,0.7506,0.1016,0.1033,0.1049,0.3636,0.1066,-0.0359,0.1083,0.3587,0.1099,0.1116,0.1132,0.1149,0.1165,0.75,0.3538,0.1181,0.1197,0.349,0.1214,-0.0396,-0.1688,0.123,-0.0433,0.2395,0.1246,0.1262,0.1277,0.1293,-0.0469,0.1309,0.7494,0.1325,0.134,0.1356,0.1371,0.1387,0.3614,0.1402,0.1417,0.1432,0.1448,0.1463,0.1477,1.0,0.7487,0.1492,0.1507,0.1522,0.1536,0.1551,0.1565,0.158,0.1594,0.1608,0.1622,0.1636,-0.0506,0.165,0.1664,0.1678,0.748,0.1691,0.1705,0.3441,0.1719,0.1732,0.1745,0.1758,0.1772,-0.0921,0.3391,0.1785,0.1797,0.7473,0.181,0.1823,0.1836,0.1848,0.1861,0.1873,0.7465,0.1885,0.1897,0.1909,0.7457,0.7448,0.1921,0.3342,0.1933,0.1945,0.1956,0.1968,0.1979,0.1991,0.2002,0.7439,0.2013,0.2024,0.7429,0.2035,0.2045,0.3292,0.742,0.7409,0.2056,-0.0543,0.2067,0.2077,0.3243,0.2087,0.5355,0.2098,0.2108,0.2118,0.2128,0.3193,0.2137,0.2147,0.2157,0.2166,0.2175,0.2184,0.7399,0.2193,0.7388,0.1896,0.2202,0.2211,0.222,0.2229,0.2237,0.2245,0.7376,0.3143,0.2254,0.2262,0.227,-0.1667,0.2278,0.3092,0.2285,0.2293,0.3042,0.23,0.2308,0.2991,0.2315,0.2322,0.2941,0.2329,0.2336,0.7364,0.2343,0.2349,0.2356,0.2362,0.2369,0.2375,0.2381,0.2387,0.2392,0.2398,0.2403,0.2409,0.2414,0.289,0.2419,0.2424,0.2429,0.2839,0.2434,0.2438,0.2443,0.2447,0.2451,0.2455,0.2459,0.2135,0.2463,0.2467,0.247,0.2474,0.2477,0.248,0.2483,0.2486,0.2489,0.2491,0.2494,0.2496,0.2498,0.4324,-0.0579,0.25,0.2502,0.2504,0.2506,0.2507,0.2509,0.251,0.2511,0.2512,0.2513,0.2514,0.2514,0.2515,0.2515,0.2515],"y":[0.0,-0.1934,-0.0514,-0.0551,-0.0587,-0.0624,-0.066,-0.0697,-0.0733,-0.077,-0.0806,-0.0842,-0.0879,-0.0915,-0.0951,-0.0987,-0.1023,-0.1059,-0.1095,-0.1131,-0.1167,-0.1203,-0.1238,-0.1274,-0.1309,-0.1345,-0.138,-0.1946,-0.1416,-0.1451,-0.1486,-0.1521,-0.1556,-0.1591,-0.1957,-0.1626,-0.1661,-0.1696,-0.1969,-0.173,-0.1765,-0.1799,-0.1833,-0.198,-0.1868,-0.1902,-0.1936,-0.197,-0.2004,-0.2037,-0.2071,-0.1992,-0.2104,-0.2003,-0.2138,-0.2171,-0.2014,-0.2204,-0.2025,-0.2237,-0.227,-0.2303,-0.2036,-0.2335,-0.2368,-0.24,-0.2046,-0.2433,-0.2057,-0.2465,-0.2497,-0.2529,-0.256,-0.2592,-0.2623,-0.2655,-0.2068,-0.2686,-0.2717,-0.2748,-0.2779,-0.2809,-0.284,-0.2078,-0.287,-0.3912,-0.29,-0.293,-0.296,-0.2088,-0.2099,-0.299,-0.3019,-0.3049,-0.3078,-0.3107,-0.3136,-0.2109,-0.3164,-0.3193,-0.3221,-0.3249,-0.3277,-0.3305,-0.3333,-0.336,-0.2495,-0.3388,-0.2493,-0.3415,-0.3442,-0.3468,-0.3495,-0.3521,-0.3547,-0.3573,-0.3599,-0.3625,-0.365,-0.3676,-0.3701,-0.3725,-0.375,-0.249,-0.3774,-0.2488,-0.3799,-0.3823,-0.2485,-0.3847,-0.387,-0.3894,-0.3917,-0.4268,-0.2482,-0.4288,-0.2479,-0.2476,-0.2472,-0.2469,-0.2465,-0.2462,-0.4307,-0.2458,-0.2454,-0.4326,-0.4344,-0.245,-0.4363,-0.2445,-0.4381,-0.2441,-0.4399,-0.2436,-0.2432,-0.2427,-0.2422,-0.4417,-0.2417,-0.2412,-0.2407,-0.2401,-0.4434,-0.4451,-0.2396,-0.4468,-0.239,-0.2384,-0.2378,-0.2372,-0.5625,-0.2366,-0.4485,-0.236,-0.2353,-0.2347,-0.234,-0.2333,-0.2327,-0.4502,-0.4518,-0.4534,-0.4681,-0.4695,-0.2319,-0.2312,-0.2305,-0.2298,-0.229,-0.4708,-0.2282,-0.2275,-0.2267,-0.2259,-0.225,-0.2242,-0.2234,-0.2225,-0.2217,-0.2208,-0.2199,-0.219,-0.472,-0.2181,-0.2172,-0.4733,-0.2162,-0.2153,-0.2143,0.0,-0.2134,-0.2124,-0.2114,-0.2104,-0.4745,-0.2094,-0.2084,-0.2073,-0.5662,-0.2063,-0.2052,-0.2041,-0.2031,-0.4757,-0.202,-0.2009,-0.1998,-0.1986,-0.1975,-0.5588,-0.1964,-0.1952,-0.194,-0.4769,-0.5698,-0.7376,-0.1929,-0.1917,-0.4781,-0.4792,-0.1905,-0.1893,-0.4803,-0.188,-0.5734,-0.4814,-0.1868,-0.1856,-0.577,-0.1843,-0.4825,-0.1831,-0.1818,-0.1805,-0.1793,-0.4835,-0.178,-0.4845,-0.1767,-0.1753,-0.174,-0.1727,-0.1713,-0.17,-0.1686,-0.1673,-0.1659,-0.1645,-0.1631,-0.4855,-0.1617,-0.1603,-0.1589,-0.1574,-0.156,-0.1545,-0.1531,-0.1516,-0.1501,-0.4864,-0.1487,-0.1472,-0.4873,-0.1457,-0.1442,-0.1427,-0.5805,-0.4882,-0.1411,-0.584,-0.1396,-0.1381,-0.1365,-0.4891,-0.135,-0.1334,-0.1319,-0.1303,-0.1287,-0.49,-0.4908,-0.1271,-0.1256,-0.124,-0.1224,-0.1207,-0.1191,-0.1175,-0.1159,-0.5875,-0.4916,-0.7012,-0.1142,-0.1126,-0.1109,-0.1093,-0.4923,-0.1076,-0.591,-0.106,-0.1043,-0.1026,-0.0055,-0.4931,-0.1009,-0.0992,-0.0976,-0.0959,-0.0941,-0.4938,-0.0924,-0.4945,-0.0907,-0.3959,-0.4951,-0.089,-0.0873,-0.0856,-0.0838,-0.0821,-0.0803,-0.5944,-0.0786,-0.0769,-0.4958,-0.0751,-0.0733,-0.0716,-0.0698,-0.068,-0.4964,-0.0663,-0.0645,-0.0627,-0.0609,-0.7032,-0.0591,-0.0574,-0.0556,-0.0538,-0.052,-0.0502,-0.497,-0.0484,-0.9362,-0.0466,-0.0447,-0.0429,-0.0411,-0.0393,-0.0375,-0.0357,-0.0338,-0.032,-0.0302,-0.0284,-0.0265,-0.0247,-0.0229,-0.5978,-0.4975,-0.021,-0.4981,-0.0192,-0.0174,-0.0155,-0.6011,-0.0137,-0.0119,-0.01,-0.0082,-0.0063,-0.0045,-0.0027,-0.2052,-0.0008,0.001,0.0029,0.0047,0.0065,0.0084,0.0102,0.0121,0.0139,0.0157,0.0176,0.0194,0.0212,0.0231,-0.6044,-0.011,0.0249,0.0267,0.0286,0.0304,0.0322,0.034,0.0359,0.0377,0.0395,0.0413,-0.4986,0.0431,0.0449,0.0467,0.0485,0.0504,0.0522,0.054,0.0557,0.0575,-0.0166,0.0593,0.0611,0.0629,0.0647,0.0665,0.0682,-0.5278,0.07,0.0718,-0.6077,0.0735,0.0753,0.077,0.0788,0.0805,0.0823,0.084,0.0857,-0.0221,0.0875,-0.499,0.0892,0.0909,-0.3177,0.0926,0.0943,-0.4995,0.096,-0.611,0.1921,0.0977,0.0994,-0.2019,0.1011,0.1028,0.1045,-0.4999,0.1061,-0.5003,0.1078,-0.5007,0.1095,-0.501,0.1111,0.1128,0.1144,0.116,0.1177,-0.6142,0.1193,0.1209,-0.6174,-0.5013,0.1225,0.1241,0.1257,0.1273,0.1289,0.1305,0.132,-0.6205,0.1336,-0.5016,0.1352,0.1367,-0.5019,0.1382,-0.5021,0.1398,0.1413,0.1428,-0.6237,0.1443,-0.6268,-0.4797,0.1458,0.1473,0.1488,0.1503,0.1518,0.1532,0.1547,0.1561,0.1576,0.159,0.1604,0.1618,-0.3028,0.1632,0.1646,0.166,0.1674,0.1688,0.1701,0.1715,-0.5023,0.1728,0.1742,0.1755,0.1768,0.1781,-0.5025,0.1794,0.1807,0.1819,0.1832,0.1845,0.1857,0.187,0.1882,0.1894,-0.5027,0.0461,0.1906,-0.1985,0.1918,-0.6298,0.193,0.1942,0.1953,0.1965,0.1976,0.1987,-0.2977,0.1999,0.201,0.2021,0.2032,0.2043,0.2053,-0.5028,-0.4786,0.2064,0.2074,0.2085,0.2095,0.2105,-0.4775,0.2115,0.2125,0.2135,-0.4763,0.2144,0.2154,0.2163,0.2173,0.2182,0.2191,0.22,0.2209,0.2218,0.2226,0.2235,0.2243,0.2251,-0.6328,-0.6358,0.2259,0.2267,0.2275,0.2283,0.2291,0.2298,0.2306,0.2313,0.232,-0.6388,0.2327,-0.2944,0.2334,0.2341,0.2348,0.2354,0.2361,0.2367,0.2373,0.2379,0.2385,0.2391,0.2396,0.2402,0.2407,0.2413,-0.5029,0.2418,-0.458,0.2423,0.2428,0.2432,0.2437,0.2441,0.2446,0.245,0.2454,-0.503,0.2458,0.2462,0.2466,0.2469,0.2473,0.2476,0.2479,0.2482,0.2485,-0.503,0.2488,0.249,-0.503,0.2493,0.2495,-0.6417,0.2498,0.25,0.2502,0.2503,0.2505,0.2507,0.2508,0.2509,0.2511,-0.0276,0.2512,0.2513,-0.0331,0.2513,0.2514,0.2514,0.2515,0.2515,0.2515,0.2515,-0.0386,0.2515,0.2515,-0.0441,0.2514,-0.503,0.2514,0.2513,-0.0496,0.2512,0.2511,0.251,0.2509,0.2507,0.2506,-0.503,-0.0551,-0.5029,0.2504,0.2502,0.25,0.2498,0.2496,-0.0607,0.2494,-0.0662,0.2491,0.2489,-0.7426,0.2486,0.2483,0.248,0.2477,0.2474,0.247,0.2467,-0.1911,-0.6446,-0.4992,0.497,-0.7489,-0.6474,-0.7475,0.2463,0.2459,0.2455,0.2451,-0.5028,0.2447,-0.4988,0.2443,0.2439,0.2434,-0.9985,0.2429,0.2424,0.2419,0.2414,0.2409,0.2404,0.2398,0.2393,-0.6503,-0.7525,-0.653,0.2387,-0.0716,0.2381,-0.5027,-0.4751,0.2375,-0.5026,0.2369,-0.7179,0.2363,0.2356,0.235,-0.5024,-0.5022,0.2343,0.2337,0.233,0.2323,-0.502,0.2316,0.2308,-0.6558,-0.6585,-0.0771,0.2301,0.2293,0.2286,-0.6612,0.2278,-0.5017,0.227,-0.6638,0.2262,0.2254,0.2246,0.2238,0.2229,-0.0826,-0.6664,0.2221,0.2212,-0.669,0.2203,-0.5015,-0.4739,0.2194,-0.5012,0.4424,0.2185,0.2176,0.2167,0.2157,-0.5008,0.2148,-0.0881,0.2138,0.2128,0.2118,0.2108,0.2098,-0.9389,0.2088,0.2078,0.2067,0.2057,0.2046,0.2035,-0.1102,-0.0936,0.2025,0.2014,0.2003,0.1991,0.198,0.1969,0.1957,0.1946,0.1934,0.1922,0.191,-0.5005,0.1898,0.1886,0.1874,-0.0991,0.1861,0.1849,-0.6715,0.1836,0.1824,0.1811,0.1798,0.1785,0.4945,-0.674,0.1772,0.1759,-0.1045,0.1746,0.1733,0.1719,0.1706,0.1692,0.1679,-0.11,0.1665,0.1651,0.1637,-0.1155,-0.1209,0.1623,-0.6765,0.1609,0.1595,0.1581,0.1566,0.1552,0.1537,0.1523,-0.1264,0.1508,0.1493,-0.1318,0.1478,0.1464,-0.6789,-0.1372,-0.1427,0.1449,-0.5001,0.1433,0.1418,-0.6813,0.1403,-0.8517,0.1388,0.1372,0.1357,0.1341,-0.6837,0.1326,0.131,0.1294,0.1279,0.1263,0.1247,-0.1481,0.1231,-0.1535,0.4659,0.1215,0.1198,0.1182,0.1166,0.115,0.1133,-0.1589,-0.686,0.1117,0.11,0.1084,0.4746,0.1067,-0.6883,0.105,0.1034,-0.6905,0.1017,0.1,-0.6927,0.0983,0.0966,-0.6949,0.0949,0.0932,-0.1643,0.0915,0.0898,0.0881,0.0863,0.0846,0.0829,0.0811,0.0794,0.0776,0.0759,0.0741,0.0724,0.0706,-0.697,0.0688,0.0671,0.0653,-0.6991,0.0635,0.0617,0.0599,0.0582,0.0564,0.0546,0.0528,-0.7237,0.051,0.0492,0.0474,0.0456,0.0437,0.0419,0.0401,0.0383,0.0365,0.0347,0.0328,0.031,0.0292,-0.9084,-0.4997,0.0274,0.0255,0.0237,0.0219,0.02,0.0182,0.0164,0.0145,0.0127,0.0108,0.009,0.0072,0.0053,0.0035,0.0016]},"types":["Adopter"],"panels":[{"title":"","events":{"t":[4.5344,4.5421,4.7746,4.8504,4.8557,4.9187,4.9656,5.4978,5.9292,6.1592,6.1719,6.2105,6.2178,6.5592,6.7514,6.7651,6.7761,7.1518,7.1764,7.1856,7.2935,7.3267,7.3517,7.3534,7.482,7.9734,8.0476,8.4306,8.4866,8.5223,8.7355,8.7789,8.798,9.0288,9.256,9.8028,9.9755,10.0832,10.4582,10.5025,10.7132,11.054,11.2003,11.5502,11.6501,12.0037,12.0317,13.4658,13.73,13.9062,14.2256,14.3974,14.8194,15.1848,15.3254,15.6703,16.0449,16.1885,16.2571,16.4041,16.6249,17.7848,18.6484,18.7508,18.8351,19.1392,19.216,19.3987,19.4337,19.4971,19.7234,19.9412,20.3826,20.5435,20.8194,20.8705,21.6214,21.7522,21.8418,22.1903,22.2993,22.3854,22.6475,22.9146,23.1098,23.3059,23.7013,24.3654,25.157,25.7133,26.9675,28.633,28.7264,28.996,29.0755,29.1619,29.6225,29.9791,30.0044,30.044,30.0852,30.1288,30.1293,30.1334,30.1856,30.2774,30.3008,30.3615,30.4163,30.422,30.457,30.4571,30.4687,30.4777,30.487,30.5539,30.8518,30.9189,30.9544,31.0737,31.1343,31.2325,31.5473,31.6023,31.6446,31.6579,31.8422,31.923,32.2024,32.2045,32.229,32.2646,32.2674,32.4105,32.7064,32.8413,32.9485,33.1317,33.1827,33.3678,33.4914,33.5892,33.5979,33.6419,33.6986,33.7131,33.9705,34.0098,34.024,34.0787,34.1574,34.3575,34.3852,34.6593,34.9354,34.9965,35.1487,35.1618,35.1962,35.36,35.5713,35.6242,35.9411,35.9429,35.9478,35.9822,36.0375,36.1336,36.1526,36.3433,36.4081,36.4677,36.4867,36.6922,36.7665,36.9509,37.0532,37.1372,37.1667,37.5006,37.543,37.5571,37.6458,37.7397,37.9772,37.9905,38.2559,38.5436,38.6289,38.7125,39.042,39.1204,39.2102,39.2746,39.29,39.3074,39.3903,39.6319,39.7473,39.803,39.8599,40.1625,40.264,40.2807,40.5128,40.5539,40.6067,40.6923,40.8081,40.8472,40.9012,41.1539,41.4224,41.5719,41.9279,41.9573,41.9874,41.9979,42.1367,42.3034,42.3259,42.3824,42.5032,42.8823,42.9489,43.1003,43.1272,43.5175,43.5526,43.9027,44.1411,44.2703,44.4533,44.6433,44.6734,44.7834,44.8464,44.8792,44.9218,45.0247,45.036,45.0747,45.2619,45.2743,45.3294,45.5605,45.5614,45.5733,45.5794,45.5933,45.5933,45.594,45.7203,45.7795,45.8788,46.1549,46.1662,46.2281,46.298,46.3479,46.3606,46.3954,46.4406,46.5681,46.5681,46.6079,46.6825,46.7197,46.7338,46.7393,46.8427,46.8833,46.9356,47.044,47.0545,47.2854,47.2953,47.2976,47.3452,47.3761,47.4594,47.4757,47.5423,47.7355,47.7558,48.1037,48.1524,48.2062,48.2761,48.2989,48.3801,48.4902,48.5383,48.556,48.59,48.7201,48.8151,48.8321,48.8463,48.8555,48.857,48.9113,48.9322,49.0977,49.2637,49.2899,49.4172,49.7466,49.7468,49.9422,49.983,50.0595,50.1206,50.219,50.2676,50.5268,50.5659,50.7024,50.9953,51.0241],"a":[5.9344,5.9421,6.1746,6.2504,6.2557,6.3187,6.3656,6.8978,7.3292,7.5592,7.5719,7.6105,7.6178,7.9592,8.1514,8.1651,8.1761,8.5518,8.5764,8.5856,8.6935,8.7267,8.7517,8.7534,8.882,9.3734,9.4476,9.8306,9.8866,9.9223,10.1355,10.1789,10.198,10.4288,10.656,11.2028,11.3755,11.4832,11.8582,11.9025,12.1132,12.454,12.6003,12.9502,13.0501,13.4037,13.4317,14.8658,15.13,15.3062,15.6256,15.7974,16.2194,16.5848,16.7254,17.0703,17.4449,17.5885,17.6571,17.8041,18.0249,19.1848,20.0484,20.1508,20.2351,20.5392,20.616,20.7987,20.8337,20.8971,21.1234,21.3412,21.7826,21.9435,22.2194,22.2705,23.0214,23.1522,23.2418,23.5903,23.6993,23.7854,24.0475,24.3146,24.5098,24.7059,25.1013,25.7654,26.557,27.1133,28.3675,30.033,30.1264,30.396,30.4755,30.5619,31.0225,31.3791,31.4044,31.444,31.4852,31.5288,31.5293,31.5334,31.5856,31.6774,31.7008,31.7615,31.8163,31.822,31.857,31.8571,31.8687,31.8777,31.887,31.9539,32.2518,32.3189,32.3544,32.4737,32.5343,32.6325,32.9473,33.0023,33.0446,33.0579,33.2422,33.323,33.6024,33.6045,33.629,33.6646,33.6674,33.8105,34.1064,34.2413,34.3485,34.5317,34.5827,34.7678,34.8914,34.9892,34.9979,35.0419,35.0986,35.1131,35.3705,35.4098,35.424,35.4787,35.5574,35.7575,35.7852,36.0593,36.3354,36.3965,36.5487,36.5618,36.5962,36.76,36.9713,37.0242,37.3411,37.3429,37.3478,37.3822,37.4375,37.5336,37.5526,37.7433,37.8081,37.8677,37.8867,38.0922,38.1665,38.3509,38.4532,38.5372,38.5667,38.9006,38.943,38.9571,39.0458,39.1397,39.3772,39.3905,39.6559,39.9436,40.0289,40.1125,40.442,40.5204,40.6102,40.6746,40.69,40.7074,40.7903,41.0319,41.1473,41.203,41.2599,41.5625,41.664,41.6807,41.9128,41.9539,42.0067,42.0923,42.2081,42.2472,42.3012,42.5539,42.8224,42.9719,43.3279,43.3573,43.3874,43.3979,43.5367,43.7034,43.7259,43.7824,43.9032,44.2823,44.3489,44.5003,44.5272,44.9175,44.9526,45.3027,45.5411,45.6703,45.8533,46.0433,46.0734,46.1834,46.2464,46.2792,46.3218,46.4247,46.436,46.4747,46.6619,46.6743,46.7294,46.9605,46.9614,46.9733,46.9794,46.9933,46.9933,46.994,47.1203,47.1795,47.2788,47.5549,47.5662,47.6281,47.698,47.7479,47.7606,47.7954,47.8406,47.9681,47.9681,48.0079,48.0825,48.1197,48.1338,48.1393,48.2427,48.2833,48.3356,48.444,48.4545,48.6854,48.6953,48.6976,48.7452,48.7761,48.8594,48.8757,48.9423,49.1355,49.1558,49.5037,49.5524,49.6062,49.6761,49.6989,49.7801,49.8902,49.9383,49.956,49.99,50.1201,50.2151,50.2321,50.2463,50.2555,50.257,50.3113,50.3322,50.4977,50.6637,50.6899,50.8172,51.1466,51.1468,51.3422,51.383,51.4595,51.5206,51.619,51.6676,51.9268,51.9659,52.1024,52.3953,52.4241],"s":[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,74,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,133,1,1,1,1,1,1,1,1,1,3,1,133,1,121,1,133,229,1,1,1,133,1,133,1,1,1,1,1,1,133,1,133,1,1,1,133,1,182,1,133,3,1,1,1,74,1,133,1,1,182,1,355,133,1,1,133,324,133,3,1,3,333,133,3,1,272,1,133,459,324,1,1,1,1,133,133,1,133,1,1,1,133,133,167,464,1,1,1,408,324,133,546,1,167,167,167,133,133,133,281,1,188,1,1,1,133,3,3,3,3,1,3,1,3,1,3,3,229,23,133,106,635,701,133,229,1,106,703,133,229,133,3,1,167,1,563,1,1,0,1,133,133,3,133,1,133,3,133,133,1,167,1,768,1,3,355,765,3,1,3,133,631,133,3,3,3,3,133,3,3,133,3,3,1,133,598,133,3,3,744,3,133,607,133,133,133,133,3,133,133,250,860,1],"c":[2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,28,29,30,31,32,33,35,36,37,39,40,41,42,44,45,46,47,48,49,50,52,53,54,55,57,59,60,61,63,64,65,67,68,69,70,71,72,73,74,75,77,78,79,80,81,82,84,85,86,87,88,91,92,93,94,95,96,98,99,100,101,102,103,104,105,107,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,126,127,128,129,130,131,132,133,135,142,145,146,148,150,152,157,162,163,165,170,172,179,180,181,182,183,189,202,205,209,214,218,223,229,233,234,235,238,239,242,244,245,248,250,255,257,269,279,282,286,287,289,293,299,300,309,310,311,316,318,322,323,329,331,333,334,341,344,350,355,362,364,379,380,382,386,394,409,410,421,431,438,441,450,452,455,458,460,461,464,468,470,472,474,480,483,484,492,494,497,499,503,505,506,519,527,533,543,544,546,548,555,562,563,569,573,587,588,598,600,615,617,626,636,639,642,652,655,663,666,668,671,678,679,680,686,688,691,699,700,701,702,703,704,705,710,712,716,725,726,727,729,731,732,734,736,740,741,744,746,749,750,751,755,757,759,765,766,769,771,772,774,775,780,782,788,795,796,808,812,815,821,822,825,832,836,837,839,847,850,853,854,855,857,860,862,867,874,876,877,884,885,889,891,894,897,900,903,917,921,929,943,944],"r":[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]},"lit":[0.0,4.2906,4.5344,4.5421,4.7746,4.8504,4.8557,4.9187,4.9656,5.4978,5.9292,6.1592,6.1719,6.2105,6.2178,6.5592,6.7514,6.7651,6.7761,7.1518,7.1764,7.1856,7.2935,7.3267,7.3517,7.3534,7.482,7.9308,7.9734,8.0476,8.4306,8.4866,8.5223,8.7355,8.7783,8.7789,8.798,9.0288,9.1559,9.256,9.8028,9.9755,10.0832,10.1503,10.4582,10.5025,10.7132,11.054,11.2003,11.5502,11.6501,11.7323,12.0037,12.0317,13.4658,13.73,13.841,13.9062,13.9267,14.2256,14.3974,14.8194,14.9713,15.1848,15.3254,15.6703,15.8661,16.0449,16.1885,16.2571,16.4041,16.6249,17.7848,18.6484,18.7508,18.8351,18.9877,19.1392,19.216,19.3987,19.4337,19.4971,19.7234,19.7546,19.9412,20.3826,20.5435,20.8194,20.8705,21.1314,21.62,21.6214,21.7522,21.8418,22.1903,22.2993,22.3854,22.5672,22.6475,22.9146,23.1098,23.3059,23.7013,24.3654,25.157,25.7133,26.9198,26.9675,28.6251,28.633,28.7264,28.996,29.0755,29.1619,29.6225,29.9791,30.0044,30.044,30.0852,30.1288,30.1293,30.1334,30.1856,30.2774,30.3008,30.3588,30.3615,30.4163,30.422,30.457,30.4571,30.4687,30.4777,30.487,30.5413,30.5539,30.5913,30.635,30.661,30.7097,30.7693,30.8269,30.8518,30.8923,30.8923,30.9189,30.9544,30.9849,31.0737,31.09,31.1343,31.203,31.2325,31.2855,31.4862,31.5072,31.5196,31.5473,31.5541,31.5547,31.5569,31.586,31.6023,31.6446,31.6553,31.6579,31.7016,31.7152,31.7713,31.8004,31.8422,31.8588,31.923,31.9307,31.9517,31.9617,31.9821,32.0792,32.2022,32.2024,32.2045,32.229,32.2646,32.2674,32.2888,32.299,32.34,32.3955,32.4104,32.4105,32.4168,32.4308,32.4548,32.4666,32.5057,32.5189,32.5254,32.5436,32.648,32.6685,32.6696,32.6835,32.7064,32.7362,32.7961,32.8413,32.896,32.8993,32.9007,32.9485,32.9637,33.0184,33.0495,33.0509,33.1317,33.1444,33.1484,33.1647,33.1827,33.2541,33.2595,33.3413,33.3436,33.3678,33.3785,33.3825,33.4069,33.4363,33.4438,33.4914,33.4994,33.5809,33.5841,33.5892,33.5979,33.6419,33.6462,33.6535,33.6986,33.7131,33.8168,33.9511,33.9705,33.9943,34.0098,34.024,34.0351,34.0541,34.0787,34.1298,34.1574,34.1917,34.2643,34.2869,34.3374,34.3575,34.3636,34.3852,34.3987,34.5066,34.5101,34.5422,34.595,34.6013,34.6031,34.6175,34.6423,34.6553,34.6562,34.6593,34.712,34.7325,34.8007,34.831,34.8316,34.8485,34.8815,34.8946,34.924,34.9354,34.9553,34.9849,34.9965,35.0894,35.0934,35.0991,35.1487,35.1618,35.1645,35.1962,35.2894,35.2949,35.3402,35.36,35.3988,35.4286,35.5317,35.5576,35.5658,35.5713,35.6242,35.6304,35.6334,35.6947,35.7734,35.8111,35.8841,35.8956,35.9328,35.9411,35.9429,35.9478,35.9519,35.9574,35.9576,35.9766,35.9822,36.0095,36.0375,36.0763,36.082,36.1131,36.1336,36.1526,36.2088,36.2643,36.3031,36.3135,36.3333,36.3433,36.3444,36.4081,36.4098,36.4677,36.4867,36.5039,36.508,36.5142,36.5214,36.6154,36.6877,36.6922,36.7188,36.7366,36.7665,36.7755,36.7989,36.8035,36.8893,36.9031,36.9509,36.9622,36.98,36.9918,37.0196,37.0532,37.0592,37.0619,37.0871,37.1146,37.123,37.1259,37.1372,37.1392,37.1667,37.1694,37.2033,37.2122,37.2207,37.2376,37.3099,37.3443,37.3636,37.3674,37.4059,37.4251,37.4341,37.4512,37.4584,37.5006,37.543,37.5477,37.5571,37.5956,37.6217,37.645,37.6458,37.6568,37.699,37.7078,37.7139,37.7209,37.7313,37.7339,37.7397,37.7676,37.7687,37.7856,37.7857,37.7983,37.8041,37.819,37.85,37.8709,37.8723,37.8805,37.9223,37.9461,37.9576,37.9772,37.9905,38.0806,38.0808,38.0961,38.1212,38.1402,38.1971,38.2003,38.2097,38.2265,38.2327,38.2559,38.2559,38.2706,38.3826,38.5003,38.5073,38.5073,38.5151,38.5184,38.5281,38.5436,38.5468,38.5803,38.5937,38.6009,38.6204,38.6245,38.6289,38.6751,38.6811,38.7125,38.7218,38.7919,38.8261,38.8482,38.8924,38.9281,38.9556,39.0349,39.042,39.1069,39.1204,39.1287,39.1449,39.2102,39.216,39.2444,39.2746,39.2874,39.29,39.3074,39.2978,39.3028,39.3903,39.4884,39.4967,39.6198,39.6319,39.7133,39.7473,39.8001,39.803,39.8441,39.8599,39.8605,39.9216,40.0509,40.0749,40.097,40.1625,40.2529,40.2625,40.264,40.2807,40.3293,40.3723,40.4203,40.446,40.4719,40.5032,40.5101,40.5128,40.5513,40.5539,40.5652,40.5716,40.6067,40.6226,40.6923,40.7717,40.8029,40.8046,40.8081,40.8334,40.8472,40.9012,40.9088,40.9121,40.9292,40.9457,40.9692,40.9852,40.9869,41.0167,41.048,41.1043,41.1364,41.1492,41.1539,41.1563,41.166,41.2232,41.2277,41.3076,41.4199,41.4204,41.4224,41.5203,41.5246,41.5552,41.5642,41.5676,41.5719,41.5905,41.6066,41.6267,41.633,41.6586,41.6742,41.7761,41.8381,41.8664,41.9279,41.9573,41.9576,41.9874,41.9928,41.9979,42.0039,42.0663,42.0701,42.0808,42.1001,42.1223,42.1367,42.1733,42.1772,42.1849,42.248,42.2903,42.3008,42.3034,42.3259,42.3393,42.3663,42.3677,42.3764,42.3807,42.3824,42.4322,42.4405,42.4963,42.5032,42.5064,42.5075,42.5904,42.6292,42.6701,42.6804,42.6894,42.7011,42.7173,42.725,42.7752,42.7809,42.8444,42.8823,42.9489,42.9603,42.9767,42.9777,42.9867,42.9943,43.0499,43.0648,43.0985,43.0992,43.1003,43.1252,43.1272,43.1353,43.2306,43.2715,43.2741,43.3288,43.3741,43.375,43.3755,43.3983,43.4236,43.4239,43.4477,43.4853,43.5047,43.5175,43.5197,43.5526,43.558,43.6898,43.6949,43.7088,43.733,43.8364,43.8566,43.88,43.9027,43.9198,43.9347,44.0139,44.0493,44.078,44.0932,44.1005,44.1178,44.1209,44.1411,44.1913,44.1974,44.2703,44.2824,44.3783,44.4533,44.5181,44.5339,44.5444,44.555,44.5609,44.5727,44.5798,44.6182,44.6278,44.6433,44.6548,44.6553,44.6734,44.6825,44.6983,44.7126,44.7135,44.7233,44.7268,44.7614,44.7834,44.8011,44.8412,44.8464,44.8491,44.8792,44.8892,44.9075,44.9218,44.931,44.9372,44.9497,44.9761,45.0012,45.0095,45.0247,45.036,45.0747,45.0886,45.159,45.2225,45.2431,45.2551,45.2619,45.271,45.2743,45.2897,45.2897,45.3294,45.3551,45.4105,45.4286,45.5077,45.5088,45.5255,45.5566,45.5605,45.5614,45.5733,45.5794,45.5933,45.5933,45.594,45.6545,45.6551,45.6906,45.712,45.7203,45.7685,45.7795,45.7825,45.8155,45.8649,45.8788,45.9304,45.9345,45.9527,45.9847,46.0245,46.0738,46.1189,46.1189,46.1549,46.1662,46.2281,46.276,46.298,46.3475,46.3479,46.3606,46.3842,46.3954,46.4068,46.4406,46.476,46.4831,46.5533,46.5681,46.5681,46.578,46.5912,46.6079,46.6105,46.6825,46.6996,46.7105,46.7197,46.7338,46.7393,46.8092,46.817,46.8277,46.8427,46.8523,46.8833,46.9121,46.9356,46.9635,46.9698,46.9775,46.9869,47.0307,47.044,47.0545,47.0601,47.1166,47.2854,47.2893,47.2953,47.2976,47.3433,47.3452,47.3761,47.3826,47.448,47.4484,47.4577,47.4594,47.4598,47.4757,47.4768,47.503,47.5089,47.5253,47.5264,47.5423,47.5437,47.5482,47.5906,47.6047,47.6093,47.6896,47.7355,47.7558,47.7818,47.8354,47.8433,47.8748,47.8761,47.9243,48.0005,48.0381,48.0704,48.0848,48.0908,48.1037,48.1126,48.1245,48.1495,48.1524,48.1526,48.174,48.2062,48.2186,48.2276,48.2429,48.2565,48.263,48.2761,48.2989,48.3563,48.3681,48.3801,48.4014,48.403,48.422,48.4243,48.461,48.4847,48.4902,48.5129,48.5192,48.5213,48.5383,48.556,48.5733,48.59,48.6154,48.6215,48.6629,48.6785,48.6878,48.6947,48.7193,48.7201,48.7908,48.7982,48.8151,48.8227,48.8313,48.8321,48.8463,48.8555,48.8558,48.857,48.8613,48.9101,48.9113,48.9271,48.9322,49.0009,49.0142,49.0308,49.0948,49.0977,49.1441,49.1568,49.1627,49.216,49.2509,49.2637,49.2637,49.272,49.2899,49.4172,49.4196,49.476,49.4844,49.5309,49.5355,49.6002,49.7466,49.7468,49.837,49.8502,49.8569,49.9422,49.9615,49.983,50.009,50.0094,50.0595,50.0693,50.0783,50.1206,50.134,50.1697,50.219,50.2333,50.2505,50.2676,50.2919,50.2936,50.3024,50.3167,50.3608,50.3668,50.4039,50.4044,50.4065,50.5009,50.5022,50.5045,50.5095,50.5268,50.531,50.5524,50.5575,50.5659,50.5732,50.594,50.6161,50.6261,50.6444,50.6606,50.6819,50.7024,50.7304,50.7444,50.7488,50.772,50.7949,50.8034,50.8163,50.825,50.8372,50.841,50.9443,50.9463,50.977,50.9953,51.0241,51.0348,51.0483,51.0564,51.0585,51.0625,51.1383,51.1792,51.2083,51.241,51.2412,51.2694,51.3073,51.3523,51.373,51.377],"glow":[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],"origin":[-1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,0,1,1,1,0,1,1,1,1,0,1,1,1,1,1,1,1,0,1,0,1,1,0,1,0,1,1,1,0,1,1,1,0,1,0,1,1,1,1,1,1,1,0,1,1,1,1,1,1,0,1,74,1,1,1,0,0,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,0,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,0,1,1,0,1,1,1,1,1,0,1,0,0,0,0,0,0,1,0,0,1,1,0,1,0,1,0,1,0,0,0,0,1,0,0,0,0,1,1,0,1,0,0,0,0,133,0,1,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,3,0,0,0,0,1,0,0,0,133,0,0,0,0,1,0,0,0,0,0,121,0,0,0,1,133,229,0,0,1,1,0,0,1,0,133,1,0,0,133,0,1,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,133,1,0,133,0,0,0,1,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,133,1,182,0,0,0,0,1,0,133,0,0,0,3,1,0,0,0,0,0,1,0,1,0,74,1,0,0,0,0,0,0,133,0,0,1,0,0,0,0,0,1,0,0,0,0,182,0,0,0,0,0,0,1,0,355,0,0,0,0,0,0,0,0,0,0,0,0,0,0,133,1,0,1,0,0,0,133,0,0,0,0,0,0,0,324,0,0,0,0,0,0,0,0,0,0,0,0,0,0,133,3,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,333,0,0,133,0,0,0,0,0,0,0,0,3,0,1,0,0,272,0,0,1,0,133,459,0,0,324,0,0,0,1,0,1,0,1,0,1,0,0,0,0,0,133,0,0,133,1,0,0,0,0,0,0,0,133,0,1,0,0,1,0,1,0,0,0,133,0,133,167,0,0,0,0,0,0,0,0,0,0,0,0,464,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,408,0,324,0,133,0,0,0,0,0,0,546,0,0,0,0,0,0,1,167,0,0,0,0,0,167,0,0,0,167,0,0,0,0,0,0,0,0,0,0,0,0,0,133,133,0,0,0,0,0,0,0,0,0,133,0,281,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,188,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,133,0,0,0,0,0,0,0,0,0,3,0,0,3,0,0,0,0,0,0,0,3,0,0,3,0,1,0,0,3,0,0,0,0,0,0,1,3,1,0,0,0,0,0,3,0,3,0,0,229,0,0,0,0,0,0,0,23,133,106,635,701,133,229,0,0,0,0,1,0,106,0,0,0,703,0,0,0,0,0,0,0,0,133,229,133,0,3,0,1,167,0,1,0,563,0,0,0,1,1,0,0,0,0,1,0,0,133,133,3,0,0,0,133,0,1,0,133,0,0,0,0,0,3,133,0,0,133,0,1,167,0,1,768,0,0,0,0,1,0,3,0,0,0,0,0,355,0,0,0,0,0,0,765,3,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,3,0,0,133,0,0,0,0,0,631,133,0,0,3,0,0,0,0,0,0,3,0,0,0,3,3,0,133,0,0,0,0,0,0,0,3,0,0,3,0,0,133,3,3,0,1,0,0,133,0,598,0,0,0,0,133,0,0,0,0,0,0,3,0,3,744,0,0,0,0,0,0,3,133,0,0,0,607,0,133,0,0,133,0,0,133,0,0,133,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,133,0,0,0,133,0,0,0,0,0,0,0,250,0,0,0,0,0,0,0,0,0,0,0,0,0,860,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"grow":{"n":[0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,23,74,74,106,106,121,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,133,167,167,167,167,167,167,182,182,188,229,229,229,229,250,272,281,324,324,324,333,355,355,408,459,464,546,563,598,607,631,635,701,703,744,765,768,860],"t":[12.0317,16.1885,30.2774,30.422,46.6079,4.5344,4.5421,4.7746,4.8504,4.8557,4.9187,4.9656,5.4978,5.9292,6.1592,6.1719,6.2105,6.2178,6.5592,6.7514,6.7651,6.7761,7.1518,7.1764,7.1856,7.2935,7.3267,7.3517,7.3534,7.482,7.9734,8.0476,8.4306,8.4866,8.5223,8.7355,8.7789,8.798,9.0288,9.256,9.8028,9.9755,10.0832,10.4582,10.5025,10.7132,11.054,11.2003,11.5502,11.6501,12.0037,13.4658,13.73,13.9062,14.2256,14.3974,14.8194,15.1848,15.3254,15.6703,16.0449,16.2571,16.4041,16.6249,17.7848,18.6484,18.7508,18.8351,19.1392,19.216,19.3987,19.4337,19.4971,19.7234,19.9412,20.5435,20.8194,20.8705,21.6214,21.7522,21.8418,22.1903,22.2993,22.3854,22.6475,22.9146,23.1098,23.3059,23.7013,24.3654,25.157,25.7133,26.9675,28.633,28.7264,28.996,29.0755,29.1619,29.6225,29.9791,30.0044,30.044,30.0852,30.1288,30.1293,30.1334,30.1856,30.3008,30.3615,30.4163,30.457,30.4571,30.4687,30.4777,30.487,30.5539,30.8518,30.9189,30.9544,31.0737,31.1343,31.2325,31.5473,31.6023,31.6446,31.6579,31.923,32.2024,32.2045,32.229,32.2646,32.2674,32.4105,32.7064,32.8413,33.1317,33.3678,33.5892,33.6986,33.7131,33.9705,34.024,34.1574,34.3575,34.3852,34.6593,34.9354,34.9965,35.1618,35.36,35.5713,35.6242,35.9429,35.9822,36.1526,36.3433,36.4081,36.4867,36.7665,36.9509,37.1372,37.543,37.5571,38.2559,39.1204,39.2746,39.6319,39.7473,39.803,39.8599,40.2807,40.5539,40.6067,40.6923,41.4224,41.5719,41.9279,42.3034,43.5175,43.9027,44.1411,44.2703,44.8792,45.0247,45.0747,45.7203,46.3479,46.3954,46.5681,46.5681,46.6825,46.8833,47.2953,47.3452,47.4594,48.1037,48.857,51.0241,32.9485,36.1336,37.9905,38.5436,39.042,44.6433,44.6734,44.7834,44.8464,44.9218,45.036,45.2619,45.2743,46.298,46.7393,47.044,47.4757,47.7558,48.1524,48.3801,48.4902,48.5383,48.556,48.7201,48.8151,48.8463,48.8555,49.2637,49.2899,49.7466,50.2676,45.5605,20.3826,36.4677,45.5733,45.7795,33.4914,31.8422,33.1827,33.5979,34.0098,34.0787,35.1487,35.1962,35.9411,36.0375,36.6922,37.5006,37.6458,37.9772,38.7125,39.29,40.1625,40.264,40.5128,40.8081,40.8472,41.9979,42.8823,42.9489,43.1003,44.4533,45.5614,45.5933,46.1549,46.2281,46.7197,46.7338,46.8427,46.9356,47.0545,47.2854,48.2062,48.2989,48.59,48.8321,48.9113,49.0977,49.7468,49.983,50.0595,50.1206,50.219,50.5268,50.5659,40.9012,42.3259,42.3824,42.5032,46.3606,47.2976,35.9478,37.0532,43.5526,33.6419,45.3294,45.594,46.1662,50.7024,39.2102,43.1272,37.7397,39.3903,41.9874,38.6289,37.1667,47.5423,41.9573,39.3074,41.1539,42.1367,46.4406,48.9322,49.9422,48.2761,45.5794,45.5933,45.8788,49.4172,47.7355,47.3761,50.9953],"v":[1,2,3,4,5,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140,141,142,143,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159,160,161,162,163,164,165,166,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189,190,191,192,193,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,1,1,2,1,2,1,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,1,2,3,4,5,6,1,2,1,1,2,3,4,1,1,1,1,2,3,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],"ramp":1.0}}],"clock":{"kind":"day","days":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,37,44,51,58,65,72,79,86,93,100,107,114,121,128,135,142,149,156,163,170,177,184],"start":-1.0,"end":54.2241,"ticks":[{"t":0.0,"label":"0"},{"t":1.0,"label":"1"},{"t":7.0,"label":"7"},{"t":30.0,"label":"30"},{"t":40.0,"label":"100"}]},"timing":{"unitSeconds":0.5,"settle":1.8,"bloom":2.8,"glide":1.4},"curve":{"title":"Adopters","axis":"Days since the first adopter, weekly after day 30","series":[{"label":"Adopters","tone":"risk","t":[0.0,4.2906,4.5344,4.5421,4.7746,4.8504,4.8557,4.9187,4.9656,5.4978,5.9292,6.1592,6.1719,6.2105,6.2178,6.5592,6.7514,6.7651,6.7761,7.1518,7.1764,7.1856,7.2935,7.3267,7.3517,7.3534,7.482,7.9308,7.9734,8.0476,8.4306,8.4866,8.5223,8.7355,8.7783,8.7789,8.798,9.0288,9.1559,9.256,9.8028,9.9755,10.0832,10.1503,10.4582,10.5025,10.7132,11.054,11.2003,11.5502,11.6501,11.7323,12.0037,12.0317,13.4658,13.73,13.841,13.9062,13.9267,14.2256,14.3974,14.8194,14.9713,15.1848,15.3254,15.6703,15.8661,16.0449,16.1885,16.2571,16.4041,16.6249,17.7848,18.6484,18.7508,18.8351,18.9877,19.1392,19.216,19.3987,19.4337,19.4971,19.7234,19.7546,19.9412,20.3826,20.5435,20.8194,20.8705,21.1314,21.62,21.6214,21.7522,21.8418,22.1903,22.2993,22.3854,22.5672,22.6475,22.9146,23.1098,23.3059,23.7013,24.3654,25.157,25.7133,26.9198,26.9675,28.6251,28.633,28.7264,28.996,29.0755,29.1619,29.6225,29.9791,30.0044,30.044,30.0852,30.1288,30.1293,30.1334,30.1856,30.2774,30.3008,30.3588,30.3615,30.4163,30.422,30.457,30.4571,30.4687,30.4777,30.487,30.5413,30.5539,30.5913,30.635,30.661,30.7097,30.7693,30.8269,30.8518,30.8923,30.8923,30.9189,30.9544,30.9849,31.0737,31.09,31.1343,31.203,31.2325,31.2855,31.4862,31.5072,31.5196,31.5473,31.5541,31.5547,31.5569,31.586,31.6023,31.6446,31.6553,31.6579,31.7016,31.7152,31.7713,31.8004,31.8422,31.8588,31.923,31.9307,31.9517,31.9617,31.9821,32.0792,32.2022,32.2024,32.2045,32.229,32.2646,32.2674,32.2888,32.299,32.34,32.3955,32.4104,32.4105,32.4168,32.4308,32.4548,32.4666,32.5057,32.5189,32.5254,32.5436,32.648,32.6685,32.6696,32.6835,32.7064,32.7362,32.7961,32.8413,32.896,32.8993,32.9007,32.9485,32.9637,33.0184,33.0495,33.0509,33.1317,33.1444,33.1484,33.1647,33.1827,33.2541,33.2595,33.3413,33.3436,33.3678,33.3785,33.3825,33.4069,33.4363,33.4438,33.4914,33.4994,33.5809,33.5841,33.5892,33.5979,33.6419,33.6462,33.6535,33.6986,33.7131,33.8168,33.9511,33.9705,33.9943,34.0098,34.024,34.0351,34.0541,34.0787,34.1298,34.1574,34.1917,34.2643,34.2869,34.3374,34.3575,34.3636,34.3852,34.3987,34.5066,34.5101,34.5422,34.595,34.6013,34.6031,34.6175,34.6423,34.6553,34.6562,34.6593,34.712,34.7325,34.8007,34.831,34.8316,34.8485,34.8815,34.8946,34.924,34.9354,34.9553,34.9849,34.9965,35.0894,35.0934,35.0991,35.1487,35.1618,35.1645,35.1962,35.2894,35.2949,35.3402,35.36,35.3988,35.4286,35.5317,35.5576,35.5658,35.5713,35.6242,35.6304,35.6334,35.6947,35.7734,35.8111,35.8841,35.8956,35.9328,35.9411,35.9429,35.9478,35.9519,35.9574,35.9576,35.9766,35.9822,36.0095,36.0375,36.0763,36.082,36.1131,36.1336,36.1526,36.2088,36.2643,36.3031,36.3135,36.3333,36.3433,36.3444,36.4081,36.4098,36.4677,36.4867,36.5039,36.508,36.5142,36.5214,36.6154,36.6877,36.6922,36.7188,36.7366,36.7665,36.7755,36.7989,36.8035,36.8893,36.9031,36.9509,36.9622,36.98,36.9918,37.0196,37.0532,37.0592,37.0619,37.0871,37.1146,37.123,37.1259,37.1372,37.1392,37.1667,37.1694,37.2033,37.2122,37.2207,37.2376,37.3099,37.3443,37.3636,37.3674,37.4059,37.4251,37.4341,37.4512,37.4584,37.5006,37.543,37.5477,37.5571,37.5956,37.6217,37.645,37.6458,37.6568,37.699,37.7078,37.7139,37.7209,37.7313,37.7339,37.7397,37.7676,37.7687,37.7856,37.7857,37.7983,37.8041,37.819,37.85,37.8709,37.8723,37.8805,37.9223,37.9461,37.9576,37.9772,37.9905,38.0806,38.0808,38.0961,38.1212,38.1402,38.1971,38.2003,38.2097,38.2265,38.2327,38.2559,38.2559,38.2706,38.3826,38.5003,38.5073,38.5073,38.5151,38.5184,38.5281,38.5436,38.5468,38.5803,38.5937,38.6009,38.6204,38.6245,38.6289,38.6751,38.6811,38.7125,38.7218,38.7919,38.8261,38.8482,38.8924,38.9281,38.9556,39.0349,39.042,39.1069,39.1204,39.1287,39.1449,39.2102,39.216,39.2444,39.2746,39.2874,39.29,39.2978,39.3028,39.3074,39.3903,39.4884,39.4967,39.6198,39.6319,39.7133,39.7473,39.8001,39.803,39.8441,39.8599,39.8605,39.9216,40.0509,40.0749,40.097,40.1625,40.2529,40.2625,40.264,40.2807,40.3293,40.3723,40.4203,40.446,40.4719,40.5032,40.5101,40.5128,40.5513,40.5539,40.5652,40.5716,40.6067,40.6226,40.6923,40.7717,40.8029,40.8046,40.8081,40.8334,40.8472,40.9012,40.9088,40.9121,40.9292,40.9457,40.9692,40.9852,40.9869,41.0167,41.048,41.1043,41.1364,41.1492,41.1539,41.1563,41.166,41.2232,41.2277,41.3076,41.4199,41.4204,41.4224,41.5203,41.5246,41.5552,41.5642,41.5676,41.5719,41.5905,41.6066,41.6267,41.633,41.6586,41.6742,41.7761,41.8381,41.8664,41.9279,41.9573,41.9576,41.9874,41.9928,41.9979,42.0039,42.0663,42.0701,42.0808,42.1001,42.1223,42.1367,42.1733,42.1772,42.1849,42.248,42.2903,42.3008,42.3034,42.3259,42.3393,42.3663,42.3677,42.3764,42.3807,42.3824,42.4322,42.4405,42.4963,42.5032,42.5064,42.5075,42.5904,42.6292,42.6701,42.6804,42.6894,42.7011,42.7173,42.725,42.7752,42.7809,42.8444,42.8823,42.9489,42.9603,42.9767,42.9777,42.9867,42.9943,43.0499,43.0648,43.0985,43.0992,43.1003,43.1252,43.1272,43.1353,43.2306,43.2715,43.2741,43.3288,43.3741,43.375,43.3755,43.3983,43.4236,43.4239,43.4477,43.4853,43.5047,43.5175,43.5197,43.5526,43.558,43.6898,43.6949,43.7088,43.733,43.8364,43.8566,43.88,43.9027,43.9198,43.9347,44.0139,44.0493,44.078,44.0932,44.1005,44.1178,44.1209,44.1411,44.1913,44.1974,44.2703,44.2824,44.3783,44.4533,44.5181,44.5339,44.5444,44.555,44.5609,44.5727,44.5798,44.6182,44.6278,44.6433,44.6548,44.6553,44.6734,44.6825,44.6983,44.7126,44.7135,44.7233,44.7268,44.7614,44.7834,44.8011,44.8412,44.8464,44.8491,44.8792,44.8892,44.9075,44.9218,44.931,44.9372,44.9497,44.9761,45.0012,45.0095,45.0247,45.036,45.0747,45.0886,45.159,45.2225,45.2431,45.2551,45.2619,45.271,45.2743,45.2897,45.2897,45.3294,45.3551,45.4105,45.4286,45.5077,45.5088,45.5255,45.5566,45.5605,45.5614,45.5733,45.5794,45.5933,45.5933,45.594,45.6545,45.6551,45.6906,45.712,45.7203,45.7685,45.7795,45.7825,45.8155,45.8649,45.8788,45.9304,45.9345,45.9527,45.9847,46.0245,46.0738,46.1189,46.1189,46.1549,46.1662,46.2281,46.276,46.298,46.3475,46.3479,46.3606,46.3842,46.3954,46.4068,46.4406,46.476,46.4831,46.5533,46.5681,46.5681,46.578,46.5912,46.6079,46.6105,46.6825,46.6996,46.7105,46.7197,46.7338,46.7393,46.8092,46.817,46.8277,46.8427,46.8523,46.8833,46.9121,46.9356,46.9635,46.9698,46.9775,46.9869,47.0307,47.044,47.0545,47.0601,47.1166,47.2854,47.2893,47.2953,47.2976,47.3433,47.3452,47.3761,47.3826,47.448,47.4484,47.4577,47.4594,47.4598,47.4757,47.4768,47.503,47.5089,47.5253,47.5264,47.5423,47.5437,47.5482,47.5906,47.6047,47.6093,47.6896,47.7355,47.7558,47.7818,47.8354,47.8433,47.8748,47.8761,47.9243,48.0005,48.0381,48.0704,48.0848,48.0908,48.1037,48.1126,48.1245,48.1495,48.1524,48.1526,48.174,48.2062,48.2186,48.2276,48.2429,48.2565,48.263,48.2761,48.2989,48.3563,48.3681,48.3801,48.4014,48.403,48.422,48.4243,48.461,48.4847,48.4902,48.5129,48.5192,48.5213,48.5383,48.556,48.5733,48.59,48.6154,48.6215,48.6629,48.6785,48.6878,48.6947,48.7193,48.7201,48.7908,48.7982,48.8151,48.8227,48.8313,48.8321,48.8463,48.8555,48.8558,48.857,48.8613,48.9101,48.9113,48.9271,48.9322,49.0009,49.0142,49.0308,49.0948,49.0977,49.1441,49.1568,49.1627,49.216,49.2509,49.2637,49.2637,49.272,49.2899,49.4172,49.4196,49.476,49.4844,49.5309,49.5355,49.6002,49.7466,49.7468,49.837,49.8502,49.8569,49.9422,49.9615,49.983,50.009,50.0094,50.0595,50.0693,50.0783,50.1206,50.134,50.1697,50.219,50.2333,50.2505,50.2676,50.2919,50.2936,50.3024,50.3167,50.3608,50.3668,50.4039,50.4044,50.4065,50.5009,50.5022,50.5045,50.5095,50.5268,50.531,50.5524,50.5575,50.5659,50.5732,50.594,50.6161,50.6261,50.6444,50.6606,50.6819,50.7024,50.7304,50.7444,50.7488,50.772,50.7949,50.8034,50.8163,50.825,50.8372,50.841,50.9443,50.9463,50.977,50.9953,51.0241,51.0348,51.0483,51.0564,51.0585,51.0625,51.1383,51.1792,51.2083,51.241,51.2412,51.2694,51.3073,51.3523,51.373,51.377],"y":[]}],"ends":false,"marks":[{"t":1.0,"y":1,"label":"1 by day 1"},{"t":7.0,"y":19,"label":"19 by day 7"},{"t":30.0,"y":116,"label":"116 by day 30"}],"step":true},"legend":[{"kind":"star","spike":1,"label":"First adopter"},{"kind":"link","tone":"risk","label":"Copied from an earlier adopter"},{"kind":"star","spike":0,"label":"No identified copy source, placed around the first adopter"}],"hud":"holders","caption":"The constellation of a skill is the network formed by its copies, shown day by day from its first adopter.","palette":{"sky":"#03050B","haze":"#0C1426","star":"#F5F7FF","glow":"#8DB3FF","trail":"#7393DC","risk":"#FF6B47","mark":"#F2C35A","ink":"#E8ECF5","muted":"#8892A8","line":"#1D2538","tints":["#8772A0","#3AA082","#D05FE2","#607564","#8F7D4D","#625660"]},"font":"Georgia, 'Times New Roman', serif","labelFont":"'Inter', 'Segoe UI', 'Helvetica Neue', 'DejaVu Sans', Arial, sans-serif","key":"journey-26","brand":"Skill Constellations"}</script>
+<script>
+function upperBound(values, target, low = 0, high = values.length) {
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (values[middle] <= target) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
+function lowerBound(values, target, low = 0, high = values.length) {
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (values[middle] < target) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
+function clampUnit(value) {
+  return Math.min(1, Math.max(0, value));
+}
+
+function smooth(share) {
+  return share * share * (3 - 2 * share);
+}
+
+function easeOut(share) {
+  return 1 - Math.pow(1 - share, 3);
+}
+
+function easeInOut(share) {
+  return share < 0.5 ? 4 * share * share * share : 1 - Math.pow(2 - 2 * share, 3) / 2;
+}
+</script>
+<script>
+const TINT_WHITENING = 0.3;
+
+function hexToRgb(hex) {
+  const value = parseInt(hex.slice(1), 16);
+  return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+}
+
+function rgba(hex, alpha) {
+  const [red, green, blue] = hexToRgb(hex);
+  return `rgba(${red},${green},${blue},${alpha})`;
+}
+
+function mixHex(base, other, share) {
+  const from = hexToRgb(base);
+  const to = hexToRgb(other);
+  const mixed = from.map((value, index) => Math.round(value + (to[index] - value) * share));
+  return "#" + mixed.map((value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+function isDark(hex) {
+  const [red, green, blue] = hexToRgb(hex);
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue < 128;
+}
+
+function glowBlend(palette) {
+  return isDark(palette.sky) ? "lighter" : "multiply";
+}
+
+function applyPalette(element, palette, font, labelFont = font) {
+  for (const [name, value] of Object.entries(palette)) {
+    if (typeof value === "string") element.style.setProperty(`--${name}`, value);
+  }
+  element.style.setProperty("--font", font);
+  element.style.setProperty("--label-font", labelFont);
+}
+
+function tintColors(palette, count) {
+  const tints = [palette.glow];
+  for (let index = 1; index < count; index += 1) {
+    const base = palette.tints[(index - 1) % palette.tints.length];
+    tints.push(mixHex(base, palette.star, TINT_WHITENING));
+  }
+  return tints;
+}
+
+function ditherOffset(index) {
+  let hash = Math.imul(index ^ 0x9e3779b9, 0x85ebca6b);
+  hash = Math.imul(hash ^ (hash >>> 13), 0xc2b2ae35);
+  return ((hash ^ (hash >>> 16)) >>> 0) / 4294967296 - 0.5;
+}
+
+function paintHaze(canvas, palette) {
+  const { width, height } = canvas;
+  const context = canvas.getContext("2d");
+  const image = context.createImageData(width, height);
+  const [inner, outer] = [hexToRgb(palette.haze), hexToRgb(palette.sky)];
+  const [x, y, reach] = [width / 2, height * 0.46, Math.hypot(width, height) * 0.62];
+  for (let pixel = 0; pixel < width * height; pixel += 1) {
+    const share = Math.min(1, Math.hypot((pixel % width) - x, Math.floor(pixel / width) - y) / reach);
+    const offset = ditherOffset(pixel);
+    for (let channel = 0; channel < 3; channel += 1) {
+      image.data[4 * pixel + channel] = inner[channel] + (outer[channel] - inner[channel]) * share + offset;
+    }
+    image.data[4 * pixel + 3] = 255;
+  }
+  context.putImageData(image, 0, 0);
+}
+</script>
+<script>
+const SPRITE = 128;
+const CORE = 0.12;
+const RING_AT = 0.68;
+const RING_SOFTNESS = 0.13;
+const RING_STEPS = 32;
+
+function spriteCanvas() {
+  const canvas = document.createElement("canvas");
+  canvas.width = SPRITE;
+  canvas.height = SPRITE;
+  return canvas;
+}
+
+function radialSprite(stops) {
+  const canvas = spriteCanvas();
+  const context = canvas.getContext("2d");
+  const half = SPRITE / 2;
+  const gradient = context.createRadialGradient(half, half, 0, half, half, half);
+  for (const [place, color] of stops) gradient.addColorStop(place, color);
+  context.fillStyle = gradient;
+  context.beginPath();
+  context.arc(half, half, half, 0, 2 * Math.PI);
+  context.fill();
+  return canvas;
+}
+
+function starSprite(core, glow, look) {
+  return radialSprite([
+    [0, rgba(core, 1)],
+    [look.core * 0.5, rgba(core, 0.95)],
+    [look.core, rgba(core, 0.72)],
+    [look.core * 1.6, rgba(glow, 0.5 * look.glow)],
+    [look.core * 1.6 + 0.24, rgba(glow, 0.1 * look.glow)],
+    [1, rgba(glow, 0)],
+  ]);
+}
+
+function ringLevel(place) {
+  return Math.exp(-Math.pow((place - RING_AT) / RING_SOFTNESS, 2));
+}
+
+function ringSprite(color) {
+  const stops = [];
+  const edge = ringLevel(1);
+  for (let step = 0; step <= RING_STEPS; step += 1) {
+    const place = step / RING_STEPS;
+    stops.push([place, rgba(color, Math.max(0, ringLevel(place) - edge) / (1 - edge))]);
+  }
+  return radialSprite(stops);
+}
+
+function spikeSprite(color) {
+  const canvas = spriteCanvas();
+  const context = canvas.getContext("2d");
+  const half = SPRITE / 2;
+  for (const upright of [false, true]) {
+    const gradient = upright
+      ? context.createLinearGradient(half, 0, half, SPRITE)
+      : context.createLinearGradient(0, half, SPRITE, half);
+    gradient.addColorStop(0, rgba(color, 0));
+    gradient.addColorStop(0.5, rgba(color, 0.85));
+    gradient.addColorStop(1, rgba(color, 0));
+    context.fillStyle = gradient;
+    if (upright) context.fillRect(half - 2, 0, 4, SPRITE);
+    else context.fillRect(0, half - 2, SPRITE, 4);
+  }
+  return canvas;
+}
+
+function buildSprites(palette, typeCount, look) {
+  const tones = [palette.glow, palette.risk];
+  const bright = { ...look, glow: 1 };
+  return {
+    look,
+    stars: tintColors(palette, typeCount).map((tint) => starSprite(palette.star, tint, look)),
+    flashes: tones.map((tone) => starSprite(palette.star, tone, bright)),
+    rings: tones.map((tone) => ringSprite(tone)),
+    spike: spikeSprite(palette.star),
+  };
+}
+
+const spriteSets = new Map();
+
+function warmSprites(palette, typeCount) {
+  for (let crowd = CROWD_FLOOR; crowd <= 1 + 1e-9; crowd += CROWD_STEP) {
+    spritesFor(palette, typeCount, lookFor(Math.round(crowd / CROWD_STEP) * CROWD_STEP));
+  }
+}
+
+function spritesFor(palette, typeCount, look) {
+  const key = look.crowd.toFixed(2);
+  if (!spriteSets.has(key)) spriteSets.set(key, buildSprites(palette, typeCount, look));
+  return spriteSets.get(key);
+}
+
+function drawSprite(context, sprite, x, y, size) {
+  context.drawImage(sprite, x - size / 2, y - size / 2, size, size);
+}
+
+function drawRing(context, sprite, x, y, radius) {
+  drawSprite(context, sprite, x, y, (2 * radius) / RING_AT);
+}
+</script>
+<script>
+const LONGEST_STEP = 0.1;
+const SAVE_EVERY_MS = 400;
+const RECORD_STEP = 1 / 30;
+
+function isRecording() {
+  return new URLSearchParams(window.location.search).has("record");
+}
+
+function recordOption(name) {
+  return isRecording() ? new URLSearchParams(window.location.search).get(name) : null;
+}
+
+function overlayScale(root) {
+  const scale = Number(recordOption("ui")) || 1;
+  root.style.setProperty("--ui", String(scale));
+  return scale;
+}
+
+function readStore(key) {
+  try {
+    return JSON.parse(window.sessionStorage.getItem(key));
+  } catch {
+    return null;
+  }
+}
+
+function writeStore(key, value) {
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    return;
+  }
+}
+
+class Clock {
+  constructor(spec, unitSeconds, key) {
+    this.start = spec.start;
+    this.end = spec.end;
+    this.unitSeconds = unitSeconds;
+    this.key = `skillnet-player-${key}`;
+    this.t = spec.start;
+    this.speed = 1;
+    this.playing = true;
+    this.savedAt = 0;
+    this.restore(readStore(this.key));
+  }
+
+  restore(saved) {
+    if (!saved) return;
+    this.t = Math.min(Math.max(saved.t, this.start), this.end);
+    this.speed = saved.speed;
+    this.playing = saved.playing && this.t < this.end;
+  }
+
+  save(now) {
+    if (now - this.savedAt < SAVE_EVERY_MS) return;
+    writeStore(this.key, { t: this.t, speed: this.speed, playing: this.playing });
+    this.savedAt = now;
+  }
+
+  advance(seconds) {
+    if (!this.playing) return false;
+    const step = Math.min(seconds, LONGEST_STEP) * this.speed;
+    this.t = Math.min(this.end, this.t + step / this.unitSeconds);
+    if (this.t >= this.end) this.playing = false;
+    return true;
+  }
+
+  seek(t) {
+    this.t = Math.min(Math.max(t, this.start), this.end);
+    this.savedAt = 0;
+  }
+
+  get finished() {
+    return this.t >= this.end;
+  }
+
+  share() {
+    return (this.t - this.start) / (this.end - this.start);
+  }
+}
+</script>
+<script>
+class Growth {
+  constructor(grow, count) {
+    this.ramp = grow.ramp;
+    this.time = Float64Array.from(grow.t);
+    this.value = Float64Array.from(grow.v);
+    this.first = new Int32Array(count + 1);
+    for (const node of grow.n) this.first[node + 1] += 1;
+    for (let node = 0; node < count; node += 1) this.first[node + 1] += this.first[node];
+  }
+
+  valueAt(node, t) {
+    const low = this.first[node];
+    const high = upperBound(this.time, t, low, this.first[node + 1]);
+    if (high === low) return 0;
+    const last = high - 1;
+    const before = last > low ? this.value[last - 1] : 0;
+    const share = Math.min(1, (t - this.time[last]) / this.ramp);
+    return before + (this.value[last] - before) * share;
+  }
+}
+</script>
+<script>
+class Motion {
+  constructor(keys, count) {
+    this.times = Float64Array.from(keys.times);
+    this.first = Int32Array.from(keys.first);
+    this.x = Float64Array.from(keys.x);
+    this.y = Float64Array.from(keys.y);
+    this.offset = new Int32Array(count);
+    let at = 0;
+    for (let node = 0; node < count; node += 1) {
+      this.offset[node] = at - Math.max(this.first[node], 0);
+      if (this.first[node] >= 0) at += this.times.length - this.first[node];
+    }
+    this.wx = new Float64Array(count);
+    this.wy = new Float64Array(count);
+    this.extent = [extent(this.x), extent(this.y)];
+    const homes = Int32Array.from(this.first, (first, node) => this.offset[node] + Math.max(first, 0));
+    this.hx = Float64Array.from(homes, (at, node) => (this.first[node] < 0 ? NaN : this.x[at]));
+    this.hy = Float64Array.from(homes, (at, node) => (this.first[node] < 0 ? NaN : this.y[at]));
+  }
+
+  place(t) {
+    const last = this.times.length - 1;
+    const index = Math.max(0, Math.min(last, upperBound(this.times, t) - 1));
+    const span = index < last ? this.times[index + 1] - this.times[index] : 1;
+    const share = index < last ? smooth(clampUnit((t - this.times[index]) / span)) : 0;
+    for (let node = 0; node < this.first.length; node += 1) this.placeNode(node, index, share);
+  }
+
+  placeNode(node, index, share) {
+    const first = this.first[node];
+    if (first < 0) {
+      this.wx[node] = NaN;
+      this.wy[node] = NaN;
+      return;
+    }
+    const from = this.offset[node] + Math.max(index, first);
+    const to = first > index ? from : this.offset[node] + Math.min(index + 1, this.times.length - 1);
+    this.wx[node] = this.x[from] + (this.x[to] - this.x[from]) * share;
+    this.wy[node] = this.y[from] + (this.y[to] - this.y[from]) * share;
+  }
+}
+</script>
+<script>
+function sortedBy(count, keys) {
+  return Int32Array.from({ length: count }, (_, index) => index).sort((a, b) => keys[a] - keys[b]);
+}
+
+function nearestEarlier(order, rank, motion) {
+  const { hx, hy } = motion;
+  const [x, y] = [hx[order[rank]], hy[order[rank]]];
+  let best = -1;
+  let closest = Infinity;
+  for (let earlier = 0; earlier < rank; earlier += 1) {
+    const other = order[earlier];
+    const distance = (hx[other] - x) * (hx[other] - x) + (hy[other] - y) * (hy[other] - y);
+    if (distance < closest) [best, closest] = [other, distance];
+  }
+  return best;
+}
+
+class Run {
+  constructor(panel, count, timing) {
+    const events = panel.events;
+    this.title = panel.title;
+    this.depart = Float64Array.from(events.t);
+    this.arrive = Float64Array.from(events.a);
+    this.source = Int32Array.from(events.s);
+    this.copier = Int32Array.from(events.c);
+    this.risk = Uint8Array.from(events.r);
+    this.lit = Float64Array.from(panel.lit, (time) => (time < 0 ? Infinity : time));
+    this.glow = Uint8Array.from(panel.glow);
+    this.origin = Int32Array.from(panel.origin);
+    this.settle = timing.settle;
+    this.bloom = timing.bloom;
+    this.glide = timing.glide;
+    this.grow = new Growth(panel.grow, count);
+    this.weeks = panel.weeks;
+    this.prepareOrders();
+    this.lighting = Uint8Array.from(this.copier, (node, index) => this.lights(node, index));
+  }
+
+  prepareOrders() {
+    const count = this.depart.length;
+    const settled = Float64Array.from(this.arrive, (time) => time + this.settle);
+    this.settledOrder = sortedBy(count, settled);
+    this.settledTimes = Float64Array.from(this.settledOrder, (index) => settled[index]);
+    this.litOrder = sortedBy(this.lit.length, this.lit);
+    this.litTimes = Float64Array.from(this.litOrder, (node) => this.lit[node]);
+    let span = 0;
+    for (let index = 0; index < count; index += 1) {
+      span = Math.max(span, this.arrive[index] - this.depart[index]);
+    }
+    this.reach = span + this.settle;
+  }
+
+  lights(node, index) {
+    return this.origin[node] === this.source[index] && Math.abs(this.lit[node] - this.depart[index]) < 1e-3;
+  }
+
+  adoptOrigins(motion) {
+    const count = this.litCount(Number.MAX_VALUE);
+    for (let rank = 1; rank < count; rank += 1) {
+      const node = this.litOrder[rank];
+      if (this.origin[node] < 0) this.origin[node] = nearestEarlier(this.litOrder, rank, motion);
+    }
+  }
+
+  activeRange(t) {
+    return [lowerBound(this.depart, t - this.reach), upperBound(this.depart, t)];
+  }
+
+  litCount(t) {
+    return upperBound(this.litTimes, t);
+  }
+}
+</script>
+<script>
+const UNIT_BASE = 640;
+const HUD_ROOM = 64;
+const MARGIN = 26;
+const SPACING_REFERENCE = 18;
+const CROWD_FLOOR = 0.1;
+const CROWD_SHARE = 0.9;
+const CROWD_STEP = 0.1;
+const MAGNIFY_POWER = 0.3;
+
+function extent(values) {
+  let low = Infinity;
+  let high = -Infinity;
+  for (const value of values) {
+    low = Math.min(low, value);
+    high = Math.max(high, value);
+  }
+  return low <= high ? [low, Math.max(high, low + 1e-6)] : [-1, 1];
+}
+
+function crowding(px, py, order, count, ratio) {
+  if (count < 2) return 1;
+  let cx = 0;
+  let cy = 0;
+  for (let rank = 0; rank < count; rank += 1) {
+    cx += px[order[rank]] / count;
+    cy += py[order[rank]] / count;
+  }
+  const reach = Float64Array.from({ length: count }, (_, rank) => {
+    const node = order[rank];
+    return Math.hypot(px[node] - cx, py[node] - cy);
+  }).sort();
+  const radius = reach[Math.floor((count - 1) * CROWD_SHARE)] / ratio;
+  const spacing = Math.sqrt((Math.PI * radius * radius) / (CROWD_SHARE * count));
+  return Math.min(1, Math.max(CROWD_FLOOR, spacing / SPACING_REFERENCE));
+}
+
+function lookFor(crowd) {
+  return {
+    crowd,
+    core: CORE / (0.3 + 0.7 * crowd),
+    glow: 0.35 + 0.65 * crowd,
+    reach: 0.35 + 0.65 * crowd,
+    trail: 0.35 + 0.65 * crowd,
+    width: 0.7 + 0.3 * crowd,
+    flash: 0.45 + 0.55 * crowd,
+    faintest: Math.min(1, 0.4 + 0.5 * crowd),
+  };
+}
+
+class View {
+  constructor(motion, count) {
+    this.spans = motion.extent.map(([low, high]) => high - low);
+    this.centre = motion.extent.map(([low, high]) => (low + high) / 2);
+    this.px = new Float32Array(count);
+    this.py = new Float32Array(count);
+    this.look = lookFor(1);
+    this.version = 0;
+  }
+
+  fit(width, height, ratio, bottom) {
+    this.width = Math.max(1, Math.round(width * ratio));
+    this.height = Math.max(1, Math.round(height * ratio));
+    this.ratio = ratio;
+    this.unit = (Math.min(width, height) / UNIT_BASE) * ratio;
+    const room = [width - 2 * MARGIN, height - HUD_ROOM - MARGIN - bottom];
+    this.scale = Math.min(room[0] / this.spans[0], room[1] / this.spans[1]) * ratio;
+    this.middle = [this.width / 2, (HUD_ROOM + room[1] / 2) * ratio];
+    this.version += 1;
+  }
+
+  project(frame, wx, wy) {
+    const [zoom, x, y] = frame;
+    const size = this.scale * zoom;
+    for (let node = 0; node < wx.length; node += 1) {
+      this.px[node] = this.middle[0] + (wx[node] - x) * size;
+      this.py[node] = this.middle[1] - (wy[node] - y) * size;
+    }
+    this.frame = frame;
+    this.magnify = Math.pow(Math.max(zoom, 1), MAGNIFY_POWER);
+  }
+
+  toWorld(sx, sy) {
+    const [zoom, x, y] = this.frame;
+    const size = this.scale * zoom;
+    return [x + (sx - this.middle[0]) / size, y - (sy - this.middle[1]) / size];
+  }
+
+  refreshLook(run, count) {
+    const crowd = crowding(this.px, this.py, run.litOrder, count, this.ratio);
+    const stepped = Math.round(Math.min(1, crowd / this.magnify) / CROWD_STEP) * CROWD_STEP;
+    if (Math.abs(stepped - this.look.crowd) < 1e-9) return false;
+    this.look = lookFor(Math.max(CROWD_FLOOR, stepped));
+    return true;
+  }
+}
+</script>
+<script>
+const AUTO_EASE = 0.5;
+const USER_EASE = 0.12;
+const AUTO_ROOM = 1.2;
+const AUTO_CLOSEST = 24;
+const USER_ZOOM = [0.6, 40];
+const SETTLED = 1e-4;
+
+function easeFrame(now, goal, share) {
+  const zoom = Math.exp(Math.log(now[0]) + (Math.log(goal[0]) - Math.log(now[0])) * share);
+  return [zoom, now[1] + (goal[1] - now[1]) * share, now[2] + (goal[2] - now[2]) * share];
+}
+
+class Camera {
+  constructor(view) {
+    this.home = [1, view.centre[0], view.centre[1]];
+    this.spans = view.spans;
+    this.now = [...this.home];
+    this.goal = [...this.home];
+    this.user = false;
+  }
+
+  fit(box) {
+    if (!box) return this.home;
+    const share = Math.max((box[1] - box[0]) / this.spans[0], (box[3] - box[2]) / this.spans[1]);
+    const zoom = Math.min(AUTO_CLOSEST, Math.max(1, 1 / Math.max(share * AUTO_ROOM, 1e-9)));
+    return [zoom, (box[0] + box[1]) / 2, (box[2] + box[3]) / 2];
+  }
+
+  settled(frame) {
+    const shift = Math.hypot(frame[1] - this.goal[1], frame[2] - this.goal[2]) * this.goal[0];
+    return Math.abs(Math.log(frame[0] / this.goal[0])) < SETTLED && shift < SETTLED * this.spans[0];
+  }
+
+  step(seconds, box) {
+    if (!this.user) this.goal = this.fit(box);
+    const share = 1 - Math.exp(-seconds / (this.user ? USER_EASE : AUTO_EASE));
+    const next = easeFrame(this.now, this.goal, share);
+    const moving = !this.settled(next);
+    this.now = moving ? next : [...this.goal];
+    return moving;
+  }
+
+  take() {
+    if (!this.user) this.goal = [...this.now];
+    this.user = true;
+  }
+
+  zoomAt(view, sx, sy, factor) {
+    this.take();
+    const [wx, wy] = view.toWorld(sx, sy);
+    const zoom = Math.min(USER_ZOOM[1], Math.max(USER_ZOOM[0], this.goal[0] * factor));
+    const size = view.scale * zoom;
+    this.goal = [zoom, wx - (sx - view.middle[0]) / size, wy + (sy - view.middle[1]) / size];
+  }
+
+  panBy(view, dx, dy) {
+    this.take();
+    const size = view.scale * this.now[0];
+    this.goal = [this.goal[0], this.goal[1] - dx / size, this.goal[2] + dy / size];
+    this.now = [this.now[0], this.now[1] - dx / size, this.now[2] + dy / size];
+  }
+
+  release() {
+    this.user = false;
+  }
+}
+</script>
+<script>
+const TRAIL_ALPHA = [0.42, 0.52];
+const TRAIL_WIDTH = 1.15;
+const COUNT_CAP = 12;
+const TONES = 2;
+
+function trailColors(palette) {
+  return [palette.trail, palette.risk];
+}
+
+function trailAlpha(risk, look) {
+  return TRAIL_ALPHA[risk] * look.trail;
+}
+
+class TrailPainter {
+  constructor(run, palette) {
+    this.run = run;
+    this.colors = trailColors(palette);
+    this.counts = new Map();
+    this.counted = 0;
+    this.layers = Array.from({ length: TONES * COUNT_CAP }, () => []);
+  }
+
+  sync(t) {
+    const stop = upperBound(this.run.settledTimes, t);
+    if (stop < this.counted) this.reset();
+    for (let rank = this.counted; rank < stop; rank += 1) this.add(this.run.settledOrder[rank]);
+    this.counted = stop;
+  }
+
+  reset() {
+    this.counts.clear();
+    this.counted = 0;
+    for (const layer of this.layers) layer.length = 0;
+  }
+
+  add(index) {
+    const run = this.run;
+    const key = (run.source[index] * run.lit.length + run.copier[index]) * TONES + run.risk[index];
+    const copies = (this.counts.get(key) || 0) + 1;
+    this.counts.set(key, copies);
+    if (copies <= COUNT_CAP) this.layers[run.risk[index] * COUNT_CAP + copies - 1].push(run.source[index], run.copier[index]);
+  }
+
+  draw(context, view, t) {
+    this.sync(t);
+    const { px, py } = view;
+    context.lineWidth = TRAIL_WIDTH * view.unit * view.look.width;
+    this.layers.forEach((pairs, layer) => {
+      if (pairs.length === 0) return;
+      const risk = Math.floor(layer / COUNT_CAP);
+      context.beginPath();
+      for (let index = 0; index < pairs.length; index += 2) {
+        context.moveTo(px[pairs[index]], py[pairs[index]]);
+        context.lineTo(px[pairs[index + 1]], py[pairs[index + 1]]);
+      }
+      context.strokeStyle = rgba(this.colors[risk], trailAlpha(risk, view.look));
+      context.stroke();
+    });
+  }
+}
+</script>
+<script>
+const PLACE_COLUMNS = 1024;
+const QUAD = [0, -1, 1, -1, 0, 1, 0, 1, 1, -1, 1, 1];
+const TRAIL_VERTEX = `#version 300 es
+precision highp float;
+uniform highp sampler2D places;
+uniform vec2 canvas;
+uniform float width;
+in vec2 ends;
+in float tone;
+in vec2 corner;
+out float shade;
+out float across;
+vec2 place(float index) {
+  int at = int(index);
+  return texelFetch(places, ivec2(at % ${PLACE_COLUMNS}, at / ${PLACE_COLUMNS}), 0).xy;
+}
+void main() {
+  vec2 from = place(ends.x);
+  vec2 to = place(ends.y);
+  vec2 along = to - from;
+  vec2 normal = vec2(-along.y, along.x) / max(length(along), 0.0001);
+  float half_width = width * 0.5 + 1.0;
+  vec2 point = mix(from, to, corner.x) + normal * corner.y * half_width;
+  gl_Position = vec4(point.x / canvas.x * 2.0 - 1.0, 1.0 - point.y / canvas.y * 2.0, 0.0, 1.0);
+  shade = tone;
+  across = corner.y * half_width;
+}`;
+const TRAIL_FRAGMENT = `#version 300 es
+precision highp float;
+uniform vec3 colors[2];
+uniform float alphas[2];
+uniform float width;
+in float shade;
+in float across;
+out vec4 color;
+void main() {
+  int tone = int(shade + 0.5);
+  float alpha = alphas[tone] * clamp(width * 0.5 + 0.5 - abs(across), 0.0, 1.0);
+  color = vec4(colors[tone] * alpha, alpha);
+}`;
+
+function compileShader(gl, kind, source) {
+  const shader = gl.createShader(kind);
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  return shader;
+}
+
+function linkProgram(gl) {
+  const program = gl.createProgram();
+  gl.attachShader(program, compileShader(gl, gl.VERTEX_SHADER, TRAIL_VERTEX));
+  gl.attachShader(program, compileShader(gl, gl.FRAGMENT_SHADER, TRAIL_FRAGMENT));
+  gl.linkProgram(program);
+  return gl.getProgramParameter(program, gl.LINK_STATUS) ? program : null;
+}
+
+function bindAttribute(gl, program, name, values, size, divisor) {
+  const location = gl.getAttribLocation(program, name);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, values, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(location);
+  gl.vertexAttribPointer(location, size, gl.FLOAT, false, 0, 0);
+  gl.vertexAttribDivisor(location, divisor);
+}
+
+function settledInstances(run) {
+  const ends = new Float32Array(run.settledOrder.length * 2);
+  const tones = new Float32Array(run.settledOrder.length);
+  run.settledOrder.forEach((index, rank) => {
+    ends.set([run.source[index], run.copier[index]], rank * 2);
+    tones[rank] = run.risk[index];
+  });
+  return [ends, tones];
+}
+
+class GlTrails {
+  constructor(gl, program, run, palette) {
+    this.gl = gl;
+    this.program = program;
+    this.run = run;
+    this.colors = new Float32Array(trailColors(palette).flatMap((hex) => hexToRgb(hex).map((value) => value / 255)));
+    this.rows = Math.ceil(run.lit.length / PLACE_COLUMNS);
+    this.uniforms = Object.fromEntries(
+      ["canvas", "width", "colors", "alphas"].map((name) => [name, gl.getUniformLocation(program, name)])
+    );
+    this.alphas = new Float32Array(TONES);
+    this.places = new Float32Array(PLACE_COLUMNS * this.rows * 2);
+    this.vertices = gl.createVertexArray();
+    gl.bindVertexArray(this.vertices);
+    const [ends, tones] = settledInstances(run);
+    bindAttribute(gl, program, "corner", new Float32Array(QUAD), 2, 0);
+    bindAttribute(gl, program, "ends", ends, 2, 1);
+    bindAttribute(gl, program, "tone", tones, 1, 1);
+    this.texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, PLACE_COLUMNS, this.rows, 0, gl.RG, gl.FLOAT, this.places);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  }
+
+  upload(view) {
+    for (let node = 0; node < view.px.length; node += 1) {
+      this.places[node * 2] = view.px[node];
+      this.places[node * 2 + 1] = view.py[node];
+    }
+    const gl = this.gl;
+    gl.bindTexture(gl.TEXTURE_2D, this.texture);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, PLACE_COLUMNS, this.rows, gl.RG, gl.FLOAT, this.places);
+  }
+
+  draw(context, view, t) {
+    const gl = this.gl;
+    this.upload(view);
+    gl.viewport(0, 0, view.width, view.height);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    const uniforms = this.uniforms;
+    gl.useProgram(this.program);
+    gl.uniform2f(uniforms.canvas, view.width, view.height);
+    gl.uniform1f(uniforms.width, TRAIL_WIDTH * view.unit * view.look.width);
+    gl.uniform3fv(uniforms.colors, this.colors);
+    for (let risk = 0; risk < TONES; risk += 1) this.alphas[risk] = trailAlpha(risk, view.look);
+    gl.uniform1fv(uniforms.alphas, this.alphas);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.bindVertexArray(this.vertices);
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, upperBound(this.run.settledTimes, t));
+  }
+}
+
+function makeTrails(canvas, run, palette) {
+  const gl = canvas.getContext("webgl2", { premultipliedAlpha: true, antialias: false });
+  const program = gl && linkProgram(gl);
+  return program ? new GlTrails(gl, program, run, palette) : new TrailPainter(run, palette);
+}
+</script>
+<script>
+const LINK_PEAK = [0.95, 1];
+const LINK_WIDTH = [1.0, 1.3];
+const ALPHA_LEVELS = 24;
+const COMET_SIZE = 15;
+const PULSE_SHARE = 0.45;
+const PULSE_REACH = 11;
+
+class LinkPainter {
+  constructor(palette) {
+    this.colors = trailColors(palette);
+    this.buckets = Array.from({ length: TONES * ALPHA_LEVELS }, () => []);
+    this.comets = [];
+    this.pulses = [];
+  }
+
+  collect(run, view, t) {
+    const [low, high] = run.activeRange(t);
+    for (let index = low; index < high; index += 1) {
+      const settled = run.arrive[index] + run.settle;
+      if (t < settled) this.collectOne(run, view, t, index);
+    }
+  }
+
+  collectOne(run, view, t, index) {
+    const risk = run.risk[index];
+    const from = run.source[index];
+    const to = run.copier[index];
+    const depart = run.depart[index];
+    const arrive = run.arrive[index];
+    const peak = LINK_PEAK[risk] * view.look.flash;
+    let reach = 1;
+    let alpha;
+    if (t < arrive) {
+      const share = (t - depart) / Math.max(arrive - depart, 1e-6);
+      alpha = peak * smooth(clampUnit(share * 1.5));
+      if (!run.lighting[index]) {
+        reach = easeInOut(share);
+        this.comets.push(index, reach, clampUnit(share * 5));
+      }
+    } else {
+      const share = (t - arrive) / run.settle;
+      alpha = trailAlpha(risk, view.look) + (peak - trailAlpha(risk, view.look)) * (1 - smooth(share));
+      if (share < PULSE_SHARE && !run.lighting[index]) this.pulses.push(index, share / PULSE_SHARE);
+    }
+    const x = view.px[from] + (view.px[to] - view.px[from]) * reach;
+    const y = view.py[from] + (view.py[to] - view.py[from]) * reach;
+    const level = Math.min(ALPHA_LEVELS - 1, Math.round(alpha * (ALPHA_LEVELS - 1)));
+    this.buckets[risk * ALPHA_LEVELS + level].push(view.px[from], view.py[from], x, y);
+  }
+
+  drawLines(context, run, view, t) {
+    this.collect(run, view, t);
+    this.buckets.forEach((segments, bucket) => this.stroke(context, segments, bucket, view.unit * view.look.width));
+  }
+
+  drawLights(context, run, view, sprites) {
+    this.drawComets(context, run, view, sprites);
+    this.drawPulses(context, run, view, sprites);
+  }
+
+  stroke(context, segments, bucket, unit) {
+    if (segments.length === 0) return;
+    const risk = Math.floor(bucket / ALPHA_LEVELS);
+    const alpha = (bucket % ALPHA_LEVELS) / (ALPHA_LEVELS - 1);
+    context.beginPath();
+    for (let index = 0; index < segments.length; index += 4) {
+      context.moveTo(segments[index], segments[index + 1]);
+      context.lineTo(segments[index + 2], segments[index + 3]);
+    }
+    context.strokeStyle = rgba(this.colors[risk], alpha);
+    context.lineWidth = LINK_WIDTH[risk] * unit;
+    context.stroke();
+    segments.length = 0;
+  }
+
+  drawComets(context, run, view, sprites) {
+    const comets = this.comets;
+    for (let index = 0; index < comets.length; index += 3) {
+      const event = comets[index];
+      const from = run.source[event];
+      const to = run.copier[event];
+      const x = view.px[from] + (view.px[to] - view.px[from]) * comets[index + 1];
+      const y = view.py[from] + (view.py[to] - view.py[from]) * comets[index + 1];
+      context.globalAlpha = comets[index + 2];
+      drawSprite(context, sprites.flashes[run.risk[event]], x, y, COMET_SIZE * view.unit * view.look.width * view.magnify);
+    }
+    context.globalAlpha = 1;
+    comets.length = 0;
+  }
+
+  drawPulses(context, run, view, sprites) {
+    const pulses = this.pulses;
+    for (let index = 0; index < pulses.length; index += 2) {
+      const event = pulses[index];
+      const share = pulses[index + 1];
+      const node = run.copier[event];
+      context.globalAlpha = 0.5 * Math.pow(1 - share, 2);
+      const radius = (2 + PULSE_REACH * easeOut(share)) * view.unit * view.magnify;
+      drawRing(context, sprites.rings[run.risk[event]], view.px[node], view.py[node], radius);
+    }
+    context.globalAlpha = 1;
+    pulses.length = 0;
+  }
+}
+</script>
+<script>
+const EXPOSURE_CELL = 9;
+const EXPOSURE_TARGET = 5;
+const EXPOSURE_FLOOR = 0.22;
+const EXPOSURE_STEP = 0.02;
+const EXPOSURE_ZOOM_STEP = 0.15;
+const EXPOSURE_EVERY = 20;
+const CELL_OFFSET = 32768;
+
+function cellKey(column, row) {
+  return (column + CELL_OFFSET) * 65536 + row + CELL_OFFSET;
+}
+
+class Exposure {
+  constructor(count) {
+    this.level = new Float32Array(count).fill(1);
+    this.exposedAt = -1;
+    this.zoom = 0;
+    this.fitted = 0;
+    this.calls = 0;
+  }
+
+  update(run, view, count) {
+    const stale = Math.abs(count - this.exposedAt) > Math.max(3, count * EXPOSURE_STEP);
+    const zoomed = Math.abs(view.frame[0] / this.zoom - 1) > EXPOSURE_ZOOM_STEP;
+    this.calls = (this.calls + 1) % EXPOSURE_EVERY;
+    if (!stale && !zoomed && this.calls > 0 && this.fitted === view.version) return;
+    const cell = EXPOSURE_CELL * view.ratio;
+    const columns = new Int32Array(count);
+    const rows = new Int32Array(count);
+    const counts = new Map();
+    for (let rank = 0; rank < count; rank += 1) {
+      const node = run.litOrder[rank];
+      columns[rank] = Math.floor(view.px[node] / cell);
+      rows[rank] = Math.floor(view.py[node] / cell);
+      const key = cellKey(columns[rank], rows[rank]);
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    for (let rank = 0; rank < count; rank += 1) {
+      const crowd = this.neighbours(counts, columns[rank], rows[rank]);
+      this.level[run.litOrder[rank]] = Math.max(EXPOSURE_FLOOR, Math.min(1, Math.sqrt(EXPOSURE_TARGET / crowd)));
+    }
+    this.exposedAt = count;
+    this.zoom = view.frame[0];
+    this.fitted = view.version;
+  }
+
+  neighbours(counts, column, row) {
+    let total = 0;
+    for (let dx = -1; dx <= 1; dx += 1) {
+      for (let dy = -1; dy <= 1; dy += 1) total += counts.get(cellKey(column + dx, row + dy)) || 0;
+    }
+    return total;
+  }
+}
+</script>
+<script>
+const STAR_BASE = 0.95;
+const STAR_STEP = 0.3;
+const STAR_LIMIT = 6;
+const SPIKE_FROM = 1.7;
+const SPIKE_LENGTH = 9;
+const FADE_SHARE = 0.18;
+const FULL_BRIGHT = 4;
+const FLASH_GROWTH = 2.4;
+const RIPPLE_REACH = 26;
+const RIPPLE_STRENGTH = 0.55;
+const BLOOM_REACH = 30;
+const BLOOM_SHARED = 2;
+
+function starRadius(copies, floor, unit) {
+  return Math.max(floor, Math.min(STAR_LIMIT, STAR_BASE + STAR_STEP * Math.sqrt(copies))) * unit;
+}
+
+function starBrightness(copies, faintest) {
+  return faintest + (1 - faintest) * Math.min(1, Math.sqrt(copies) / FULL_BRIGHT);
+}
+
+function bloomShares(view, nodes, shares) {
+  const reach = BLOOM_REACH * view.unit;
+  for (const node of nodes) {
+    let crowd = 0;
+    for (const other of nodes) {
+      crowd += Math.max(0, 1 - Math.hypot(view.px[node] - view.px[other], view.py[node] - view.py[other]) / reach);
+    }
+    shares[node] = Math.min(1, Math.sqrt(BLOOM_SHARED / crowd));
+  }
+}
+
+function drawBloom(context, star, share, sprites) {
+  const fading = Math.pow(1 - share, 2) * star.share;
+  context.globalAlpha = fading * star.level;
+  const flash = (2 * star.radius * (1 + FLASH_GROWTH * Math.pow(1 - share, 3))) / sprites.look.core;
+  drawSprite(context, sprites.flashes[star.tone], star.x, star.y, flash);
+  context.globalAlpha = RIPPLE_STRENGTH * star.share * star.level * sprites.look.reach * Math.pow(1 - share, 1.6);
+  const radius = star.radius + RIPPLE_REACH * sprites.look.reach * star.unit * easeOut(share);
+  drawRing(context, sprites.rings[star.tone], star.x, star.y, radius);
+}
+
+class StarPainter {
+  constructor(nodes) {
+    this.spike = Uint8Array.from(nodes.spike);
+    this.tint = Uint8Array.from(nodes.tint);
+    this.floor = Float32Array.from(nodes.floor || nodes.tint.map(() => 0));
+    this.star = { x: 0, y: 0, radius: 0, unit: 1, tone: 0, bright: 1, level: 1, share: 1 };
+    this.exposure = new Exposure(nodes.spike.length);
+    this.shares = new Float32Array(nodes.spike.length);
+  }
+
+  draw(context, run, view, t, sprites) {
+    const count = run.litCount(t);
+    this.exposure.update(run, view, count);
+    bloomShares(view, run.litOrder.subarray(run.litCount(t - run.bloom), count), this.shares);
+    for (let rank = 0; rank < count; rank += 1) {
+      const node = run.litOrder[rank];
+      const age = t - run.lit[node];
+      this.place(run, view, node, t);
+      context.globalAlpha = this.star.bright * this.star.level * Math.min(1, age / (run.bloom * FADE_SHARE));
+      this.drawStar(context, node, sprites);
+      this.star.share = this.shares[node];
+      if (age < run.bloom) drawBloom(context, this.star, age / run.bloom, sprites);
+    }
+    context.globalAlpha = 1;
+  }
+
+  place(run, view, node, t) {
+    const star = this.star;
+    star.x = view.px[node];
+    star.y = view.py[node];
+    star.unit = view.unit * view.magnify;
+    const copies = run.grow.valueAt(node, t);
+    star.radius = starRadius(copies, this.floor[node], star.unit);
+    star.bright = starBrightness(copies, view.look.faintest);
+    star.level = this.exposure.level[node];
+    star.tone = run.glow[node];
+  }
+
+  drawStar(context, node, sprites) {
+    const star = this.star;
+    drawSprite(context, sprites.stars[this.tint[node]], star.x, star.y, (2 * star.radius) / sprites.look.core);
+    if (this.spike[node] && star.radius > SPIKE_FROM * star.unit) {
+      drawSprite(context, sprites.spike, star.x, star.y, SPIKE_LENGTH * star.radius);
+    }
+  }
+}
+</script>
+<script>
+const DAY_MS = 86400000;
+const WEEK_DAYS = 7;
+const DATE_FORMAT = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
+const COUNT_FORMAT = new Intl.NumberFormat("en-US");
+
+function dayAt(days, t) {
+  const index = Math.max(0, Math.min(days.length - 1, Math.floor(t)));
+  const share = Math.max(0, t - index);
+  const next = index + 1 < days.length ? days[index + 1] : days[index] + WEEK_DAYS;
+  return Math.max(0, days[index] + (next - days[index]) * share);
+}
+
+function clockLabel(clock, t) {
+  if (clock.kind === "day") return `Day ${Math.floor(dayAt(clock.days, t))}`;
+  const origin = Date.parse(clock.origin);
+  const moment = Math.min(origin + t * WEEK_DAYS * DAY_MS, Date.parse(clock.last));
+  return DATE_FORMAT.format(new Date(Math.max(origin, moment)));
+}
+
+function counted(count, one, many) {
+  return `${COUNT_FORMAT.format(count)} ${count === 1 ? one : many}`;
+}
+
+function noteLabel(run, mode, t) {
+  if (mode === "holders") return t < run.litTimes[0] ? "" : counted(run.litCount(t), "adopter", "adopters");
+  const week = Math.floor(t);
+  const copies = run.weeks.copies[week] || 0;
+  if (copies === 0) return "";
+  const off = run.weeks.off[week] || 0;
+  const note = `${counted(copies, "copy", "copies")} this week`;
+  return off ? `${note}, ${COUNT_FORMAT.format(off)} of them involving a repository outside this view` : note;
+}
+
+class Hud {
+  constructor(host, title) {
+    this.element = document.createElement("div");
+    this.element.className = "hud";
+    this.title = this.line("title", title);
+    this.stamp = this.line("stamp", "");
+    this.note = this.line("note", "");
+    host.appendChild(this.element);
+    if (!title) this.title.remove();
+  }
+
+  line(name, text) {
+    const element = document.createElement("div");
+    element.className = name;
+    element.textContent = text;
+    this.element.appendChild(element);
+    return element;
+  }
+
+  update(stamp, note) {
+    if (this.stamp.textContent !== stamp) this.stamp.textContent = stamp;
+    if (this.note.textContent !== note) this.note.textContent = note;
+  }
+}
+</script>
+<script>
+const RING_RADIUS = 6.5;
+const RING_WIDTH = 1.6;
+
+class AuditRings {
+  constructor(panel) {
+    this.nodes = Int32Array.from(panel.audited || []);
+    this.from = panel.auditAt === undefined ? Infinity : panel.auditAt;
+  }
+
+  draw(context, run, view, t, colour) {
+    if (t < this.from || this.nodes.length === 0) return;
+    const radius = RING_RADIUS * view.unit * view.magnify;
+    context.globalCompositeOperation = "source-over";
+    context.globalAlpha = 1;
+    context.strokeStyle = colour;
+    context.lineWidth = RING_WIDTH * view.ratio;
+    context.beginPath();
+    for (const node of this.nodes) {
+      if (run.lit[node] > t) continue;
+      context.moveTo(view.px[node] + radius, view.py[node]);
+      context.arc(view.px[node], view.py[node], radius, 0, 2 * Math.PI);
+    }
+    context.stroke();
+  }
+}
+</script>
+<script>
+const HOVER_REACH = 9;
+const LOOK_EVERY = 12;
+
+class SkyPanel {
+  constructor(host, scene, panel, motion) {
+    this.element = element("div", "panel", host);
+    this.background = element("canvas", "", this.element);
+    this.trailCanvas = element("canvas", "", this.element);
+    this.canvas = element("canvas", "", this.element);
+    this.context = this.canvas.getContext("2d");
+    this.palette = scene.palette;
+    this.blend = glowBlend(scene.palette);
+    this.typeCount = scene.types.length;
+    const count = scene.nodes.spike.length;
+    this.run = new Run(panel, count, scene.timing);
+    this.run.adoptOrigins(motion);
+    this.view = new View(motion, count);
+    this.trails = makeTrails(this.trailCanvas, this.run, scene.palette);
+    this.lines = new LinkPainter(scene.palette);
+    this.stars = new StarPainter(scene.nodes);
+    this.hud = new Hud(this.element, panel.title);
+    this.rings = new AuditRings(panel);
+    this.wx = new Float64Array(count);
+    this.wy = new Float64Array(count);
+    this.frames = 0;
+  }
+
+  resize(ratio, bottom) {
+    const box = this.element.getBoundingClientRect();
+    this.view.fit(box.width, box.height, ratio, bottom);
+    for (const canvas of [this.canvas, this.trailCanvas, this.background]) {
+      canvas.width = this.view.width;
+      canvas.height = this.view.height;
+    }
+    this.sprites = spritesFor(this.palette, this.typeCount, this.view.look);
+    paintHaze(this.background, this.palette);
+  }
+
+  place(t, motion) {
+    const run = this.run;
+    this.wx.set(motion.wx);
+    this.wy.set(motion.wy);
+    for (let rank = run.litCount(t - run.glide); rank < run.litCount(t); rank += 1) {
+      const node = run.litOrder[rank];
+      const origin = run.origin[node];
+      if (origin < 0) continue;
+      const share = easeInOut(clampUnit((t - run.lit[node]) / run.glide));
+      this.wx[node] = this.wx[origin] + (this.wx[node] - this.wx[origin]) * share;
+      this.wy[node] = this.wy[origin] + (this.wy[node] - this.wy[origin]) * share;
+    }
+  }
+
+  extendBox(box, t) {
+    let [left, right, bottom, top] = box || [Infinity, -Infinity, Infinity, -Infinity];
+    for (let rank = 0; rank < this.run.litCount(t); rank += 1) {
+      const node = this.run.litOrder[rank];
+      const x = this.wx[node];
+      const y = this.wy[node];
+      if (Number.isNaN(x)) continue;
+      left = Math.min(left, x);
+      right = Math.max(right, x);
+      bottom = Math.min(bottom, y);
+      top = Math.max(top, y);
+    }
+    return left <= right ? [left, right, bottom, top] : box;
+  }
+
+  draw(t, frame, stamp, mode) {
+    const { context, run, view } = this;
+    view.project(frame, this.wx, this.wy);
+    this.frames = (this.frames + 1) % LOOK_EVERY;
+    if (this.frames === 0 && view.refreshLook(run, run.litCount(t))) {
+      this.sprites = spritesFor(this.palette, this.typeCount, view.look);
+    }
+    context.globalCompositeOperation = "source-over";
+    context.clearRect(0, 0, view.width, view.height);
+    this.trails.draw(context, view, t);
+    this.lines.drawLines(context, run, view, t);
+    context.globalCompositeOperation = this.blend;
+    this.stars.draw(context, run, view, t, this.sprites);
+    this.lines.drawLights(context, run, view, this.sprites);
+    this.rings.draw(context, run, view, t, this.palette.ink);
+    this.hud.update(stamp, noteLabel(run, mode, t));
+  }
+
+  nearest(clientX, clientY, t) {
+    const box = this.canvas.getBoundingClientRect();
+    const ratio = this.view.ratio;
+    const [x, y] = [(clientX - box.left) * ratio, (clientY - box.top) * ratio];
+    let best = -1;
+    let closest = Math.pow(HOVER_REACH * ratio, 2);
+    for (let rank = 0; rank < this.run.litCount(t); rank += 1) {
+      const node = this.run.litOrder[rank];
+      const distance = Math.pow(this.view.px[node] - x, 2) + Math.pow(this.view.py[node] - y, 2);
+      if (distance < closest) [best, closest] = [node, distance];
+    }
+    return best;
+  }
+}
+</script>
+<script>
+const SWATCH = [24, 18];
+
+function swatchCanvas(ratio) {
+  const canvas = document.createElement("canvas");
+  canvas.width = SWATCH[0] * ratio;
+  canvas.height = SWATCH[1] * ratio;
+  const context = canvas.getContext("2d");
+  context.scale(ratio, ratio);
+  return [canvas, context];
+}
+
+function paintStar(context, item, { sprites }) {
+  const [x, y] = [SWATCH[0] / 2, SWATCH[1] / 2];
+  drawSprite(context, sprites.stars[item.tint || 0], x, y, SWATCH[1]);
+  drawSprite(context, sprites.stars[item.tint || 0], x, y, SWATCH[1] * 0.6);
+  if (!item.spike) return;
+  drawSprite(context, sprites.spike, x, y, SWATCH[0]);
+  drawSprite(context, sprites.spike, x, y, SWATCH[1]);
+}
+
+function paintLink(context, item, { sprites, palette }) {
+  const color = item.tone === "risk" ? palette.risk : palette.glow;
+  context.strokeStyle = rgba(color, 0.9);
+  context.lineWidth = 1.4;
+  context.beginPath();
+  context.moveTo(1, SWATCH[1] - 3);
+  context.lineTo(SWATCH[0] - 1, 3);
+  context.stroke();
+  const sprite = sprites.flashes[item.tone === "risk" ? 1 : 0];
+  drawSprite(context, sprite, SWATCH[0] * 0.68, SWATCH[1] * 0.37, 14);
+}
+
+function paintLine(context, item, { palette }) {
+  context.strokeStyle = palette[item.tone];
+  context.lineWidth = 2.1;
+  context.setLineDash(item.dashed ? [5, 3] : []);
+  context.beginPath();
+  context.moveTo(2, SWATCH[1] / 2);
+  context.lineTo(SWATCH[0] - 2, SWATCH[1] / 2);
+  context.stroke();
+}
+
+function paintRing(context, item, { sprites, palette }) {
+  paintStar(context, { tint: 0 }, { sprites });
+  context.globalCompositeOperation = "source-over";
+  context.strokeStyle = palette.ink;
+  context.lineWidth = 1.6;
+  context.beginPath();
+  context.arc(SWATCH[0] / 2, SWATCH[1] / 2, 7, 0, 2 * Math.PI);
+  context.stroke();
+}
+
+const SWATCH_PAINTERS = { link: paintLink, line: paintLine, ring: paintRing };
+
+function legendItem(item, sprites, palette, ratio) {
+  const element = document.createElement("span");
+  element.className = "item";
+  const [canvas, context] = swatchCanvas(ratio);
+  context.globalCompositeOperation = glowBlend(palette);
+  (SWATCH_PAINTERS[item.kind] || paintStar)(context, item, { sprites, palette });
+  const label = document.createElement("span");
+  label.textContent = item.label;
+  element.append(canvas, label);
+  return element;
+}
+
+function buildLegend(host, items, sprites, palette, ratio) {
+  const element = document.createElement("div");
+  element.className = "legend";
+  for (const item of items) element.appendChild(legendItem(item, sprites, palette, ratio));
+  host.appendChild(element);
+  return element;
+}
+</script>
+<script>
+const PLOT_INSET = { left: 66, right: 24, top: 36, bottom: 26 };
+const COMPACT_FORMAT = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
+
+function niceStep(span, count) {
+  const raw = span / Math.max(1, count);
+  const power = Math.pow(10, Math.floor(Math.log10(raw)));
+  const scaled = raw / power;
+  const step = scaled <= 1 ? 1 : scaled <= 2 ? 2 : scaled <= 5 ? 5 : 10;
+  return Math.max(1, step * power);
+}
+
+function niceTicks(highest, count) {
+  const step = niceStep(Math.max(highest, 1), count);
+  const top = Math.max(step, Math.ceil(highest / step) * step);
+  const ticks = [];
+  for (let value = 0; value <= top + 1e-9; value += step) ticks.push(value);
+  return ticks;
+}
+
+function prepareSeries(line, step) {
+  const t = Float64Array.from(line.t);
+  const y = line.y.length ? Float64Array.from(line.y) : Float64Array.from(line.t, (_, index) => index + 1);
+  return { label: line.label, tone: line.tone, dashed: Boolean(line.dashed), t, y, step };
+}
+
+function seriesValue(series, t) {
+  const index = upperBound(series.t, t) - 1;
+  if (series.step) return index < 0 ? 0 : series.y[index];
+  if (index < 0) return series.y[0] || 0;
+  if (index >= series.t.length - 1) return series.y[series.y.length - 1];
+  const share = (t - series.t[index]) / (series.t[index + 1] - series.t[index]);
+  return series.y[index] + (series.y[index + 1] - series.y[index]) * share;
+}
+
+function traceSeries(context, series, frame, end) {
+  context.beginPath();
+  context.moveTo(frame.x(series.t[0]), frame.y(series.step ? 0 : series.y[0]));
+  for (let index = 0; index < series.t.length; index += 1) {
+    if (series.step) context.lineTo(frame.x(series.t[index]), frame.y(index ? series.y[index - 1] : 0));
+    context.lineTo(frame.x(series.t[index]), frame.y(series.y[index]));
+  }
+  context.lineTo(frame.x(end), frame.y(series.y[series.y.length - 1] || 0));
+}
+
+class PlotFrame {
+  constructor(width, height, clock, top, right) {
+    this.left = PLOT_INSET.left;
+    this.right = width - right;
+    this.top = PLOT_INSET.top;
+    this.bottom = height - PLOT_INSET.bottom;
+    this.start = clock.start;
+    this.end = clock.end;
+    this.highest = top;
+  }
+
+  x(t) {
+    return this.left + ((t - this.start) / (this.end - this.start)) * (this.right - this.left);
+  }
+
+  y(value) {
+    return this.bottom - (value / this.highest) * (this.bottom - this.top);
+  }
+
+  timeAt(x) {
+    const share = clampUnit((x - this.left) / (this.right - this.left));
+    return this.start + share * (this.end - this.start);
+  }
+}
+</script>
+<script>
+const LABEL_FONT = 11.5;
+const LABEL_GAP = 14;
+const END_ROOM = 92;
+const LABEL_ROOM = 6;
+
+function labelPlaces(heights, lowest) {
+  const places = [];
+  for (const height of heights) places.push(Math.max(height - 4, places.length ? places[places.length - 1] + LABEL_GAP : -Infinity));
+  const excess = places.length ? places[places.length - 1] - lowest : 0;
+  return excess > 0 ? places.map((place) => place - excess) : places;
+}
+
+class GrowthCurve {
+  constructor(host, scene, scrub) {
+    this.element = document.createElement("div");
+    this.element.className = "curve";
+    this.canvas = document.createElement("canvas");
+    this.element.appendChild(this.canvas);
+    host.appendChild(this.element);
+    this.context = this.canvas.getContext("2d");
+    this.base = document.createElement("canvas");
+    this.spec = scene.curve;
+    this.clock = scene.clock;
+    this.palette = scene.palette;
+    this.font = scene.font;
+    this.series = scene.curve.series.map((line) => prepareSeries(line, scene.curve.step)).sort((a, b) => a.dashed - b.dashed);
+    this.listen(scrub);
+  }
+
+  tone(name) {
+    const tones = { risk: this.palette.risk, ink: this.palette.ink, glow: this.palette.glow, mark: this.palette.mark };
+    return tones[name] || this.palette.muted;
+  }
+
+  text(context, size, color, align) {
+    context.font = `${size}px ${this.font}`;
+    context.fillStyle = color;
+    context.textAlign = align;
+  }
+
+  label(context, text, x, y) {
+    context.strokeStyle = this.palette.sky;
+    context.lineWidth = 3;
+    context.lineJoin = "round";
+    context.strokeText(text, x, y);
+    context.fillText(text, x, y);
+  }
+
+  listen(scrub) {
+    const canvas = this.canvas;
+    canvas.addEventListener("pointerdown", (event) => {
+      canvas.setPointerCapture(event.pointerId);
+      scrub.begin(this.frame.timeAt(event.offsetX));
+    });
+    canvas.addEventListener("pointermove", (event) => {
+      if (canvas.hasPointerCapture(event.pointerId)) scrub.move(this.frame.timeAt(event.offsetX));
+    });
+    canvas.addEventListener("pointerup", () => scrub.end());
+  }
+
+  resize(ratio, scale) {
+    const box = this.element.getBoundingClientRect();
+    this.ratio = ratio * scale;
+    this.width = box.width / scale;
+    this.height = box.height / scale;
+    for (const canvas of [this.canvas, this.base]) {
+      canvas.width = Math.round(box.width * ratio);
+      canvas.height = Math.round(box.height * ratio);
+    }
+    const highest = Math.max(1, ...this.series.map((line) => Math.max(...line.y, 0)));
+    this.ticks = niceTicks(highest * 1.06, 3);
+    const right = this.spec.ends ? END_ROOM : PLOT_INSET.right;
+    this.frame = new PlotFrame(this.width, this.height, this.clock, this.ticks[this.ticks.length - 1], right);
+    paintCurveBase(this, this.base.getContext("2d"));
+    this.markPlan = markLabels(this, this.base.getContext("2d"));
+  }
+
+  draw(t) {
+    const context = this.context;
+    const frame = this.frame;
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    context.drawImage(this.base, 0, 0);
+    context.setTransform(this.ratio, 0, 0, this.ratio, 0, 0);
+    const cursor = frame.x(t);
+    this.clipPlot(context, cursor);
+    for (const line of this.series) this.stroke(context, line, line.tone === "faint" ? 0.9 : 1, 2.4);
+    context.restore();
+    context.strokeStyle = rgba(this.palette.ink, 0.4);
+    context.lineWidth = 1;
+    context.beginPath();
+    context.moveTo(cursor, frame.top - 6);
+    context.lineTo(cursor, frame.bottom);
+    context.stroke();
+    if (this.spec.values !== false) this.drawValues(context, t, cursor);
+  }
+
+  clipPlot(context, right) {
+    context.save();
+    context.beginPath();
+    context.rect(this.frame.left, 0, Math.max(0, right - this.frame.left), this.height);
+    context.clip();
+  }
+
+  stroke(context, line, alpha, width) {
+    traceSeries(context, line, this.frame, this.clock.end);
+    context.strokeStyle = rgba(this.tone(line.tone), alpha);
+    context.lineWidth = width;
+    context.lineJoin = "round";
+    context.setLineDash(line.dashed ? [3 * width, 2.5 * width] : []);
+    context.stroke();
+    context.setLineDash([]);
+  }
+
+  drawValues(context, t, cursor) {
+    const shown = this.series.filter((line) => line.tone !== "faint");
+    const points = shown.map((line) => ({ line, value: Math.round(seriesValue(line, t)) }));
+    points.sort((a, b) => b.value - a.value || (a.line.tone === "risk" ? -1 : 1));
+    const distinct = points.filter((point, index) => index === 0 || point.value !== points[index - 1].value);
+    const places = labelPlaces(distinct.map((point) => this.frame.y(point.value)), this.frame.bottom - LABEL_ROOM);
+    const flip = cursor > this.frame.right - 56;
+    const labels = distinct.map((point, index) => ({ point, y: places[index], text: COUNT_FORMAT.format(point.value) }));
+    const align = flip ? "right" : "left";
+    const x = cursor + (flip ? -7 : 7);
+    this.text(context, LABEL_FONT, this.palette.ink, align);
+    drawMarkLabels(this, context, labels.map((item) => labelBox(context, item.text, x, item.y, align)));
+    for (const item of labels) {
+      const color = this.tone(item.point.line.tone);
+      context.fillStyle = color;
+      context.beginPath();
+      context.arc(cursor, this.frame.y(item.point.value), 3.2, 0, 2 * Math.PI);
+      context.fill();
+      this.text(context, LABEL_FONT, color, align);
+      this.label(context, item.text, x, item.y);
+    }
+  }
+}
+</script>
+<script>
+function paintCurveBase(curve, context) {
+  context.setTransform(curve.ratio, 0, 0, curve.ratio, 0, 0);
+  context.fillStyle = curve.palette.sky;
+  context.fillRect(0, 0, curve.width, curve.height);
+  paintGrid(curve, context);
+  paintTimeTicks(curve, context);
+  curve.clipPlot(context, curve.frame.right);
+  for (const line of curve.series) curve.stroke(context, line, line.tone === "faint" ? 0.45 : 0.3, 1.4);
+  context.restore();
+  paintMarks(curve, context);
+  paintRules(curve, context);
+  paintEnds(curve, context);
+  paintAxis(curve, context);
+  curve.text(context, 12.5, curve.palette.ink, "left");
+  context.fillText(curve.spec.title, PLOT_INSET.left - 52, 20);
+}
+
+function paintGrid(curve, context) {
+  const frame = curve.frame;
+  context.strokeStyle = curve.palette.line;
+  context.lineWidth = 1;
+  curve.text(context, LABEL_FONT, curve.palette.muted, "right");
+  context.textBaseline = "middle";
+  for (const value of curve.ticks) {
+    const y = Math.round(frame.y(value)) + 0.5;
+    context.beginPath();
+    context.moveTo(frame.left, y);
+    context.lineTo(frame.right, y);
+    context.stroke();
+    context.fillText(COMPACT_FORMAT.format(value), frame.left - 10, y);
+  }
+  context.textBaseline = "alphabetic";
+}
+
+function paintTimeTicks(curve, context) {
+  const frame = curve.frame;
+  curve.text(context, LABEL_FONT, curve.palette.muted, "center");
+  context.strokeStyle = curve.palette.muted;
+  for (const tick of visibleTicks(curve, context)) {
+    const x = frame.x(tick.t);
+    context.beginPath();
+    context.moveTo(x, frame.bottom);
+    context.lineTo(x, frame.bottom + 4);
+    context.stroke();
+    context.fillText(tick.label, x, frame.bottom + 17);
+  }
+}
+
+function paintAxis(curve, context) {
+  if (!curve.spec.axis) return;
+  curve.text(context, LABEL_FONT, curve.palette.muted, "right");
+  context.fillText(curve.spec.axis, curve.frame.right, 20);
+}
+
+function paintMarks(curve, context) {
+  const frame = curve.frame;
+  for (const mark of curve.spec.marks) {
+    const [x, y] = [frame.x(mark.t), frame.y(mark.y)];
+    context.fillStyle = curve.palette.mark;
+    context.beginPath();
+    context.arc(x, y, 3.6, 0, 2 * Math.PI);
+    context.fill();
+  }
+}
+
+function paintRules(curve, context) {
+  const frame = curve.frame;
+  curve.text(context, LABEL_FONT, curve.palette.ink, "left");
+  context.strokeStyle = rgba(curve.palette.ink, 0.6);
+  context.setLineDash([4, 4]);
+  for (const rule of curve.spec.rules || []) {
+    const x = Math.round(frame.x(rule.t)) + 0.5;
+    context.beginPath();
+    context.moveTo(x, frame.top - 6);
+    context.lineTo(x, frame.bottom);
+    context.stroke();
+    curve.label(context, rule.label, x + 6, frame.top + 4);
+  }
+  context.setLineDash([]);
+}
+
+function paintEnds(curve, context) {
+  if (!curve.spec.ends) return;
+  const frame = curve.frame;
+  const ends = curve.series.map((line) => ({ line, y: frame.y(line.y[line.y.length - 1]) }));
+  ends.sort((a, b) => a.y - b.y);
+  let floor = -Infinity;
+  for (const end of ends) {
+    const y = Math.max(end.y + 4, floor + LABEL_GAP);
+    floor = y;
+    curve.text(context, LABEL_FONT, curve.tone(end.line.tone), "left");
+    curve.label(context, end.line.label, frame.right + 8, y);
+  }
+}
+</script>
+<script>
+const LABEL_PAD = 3;
+const TICK_GAP = 6;
+
+function labelBox(context, text, x, y, align) {
+  const width = context.measureText(text).width;
+  const left = align === "right" ? x - width : x;
+  return [left - LABEL_PAD, y - LABEL_FONT, left + width + LABEL_PAD, y + LABEL_PAD];
+}
+
+function boxesCollide(a, b) {
+  return a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+}
+
+function markLabels(curve, context) {
+  curve.text(context, LABEL_FONT, curve.palette.ink, "left");
+  const kept = [];
+  for (const mark of [...curve.spec.marks].sort((a, b) => a.t - b.t)) {
+    const free = markPlaces(curve, context, mark).find((place) => !kept.some((other) => boxesCollide(place.box, other.box)));
+    if (free) kept.push({ mark, ...free });
+  }
+  return kept;
+}
+
+function markPlaces(curve, context, mark) {
+  const [x, y] = [curve.frame.x(mark.t), curve.frame.y(mark.y) - 9];
+  const left = { x: x - 5, y, box: labelBox(context, mark.label, x - 5, y, "right"), align: "right" };
+  const right = { x: x + 5, y, box: labelBox(context, mark.label, x + 5, y, "left"), align: "left" };
+  return left.box[0] > curve.frame.left + LABEL_PAD ? [left, right] : [right];
+}
+
+function drawMarkLabels(curve, context, taken) {
+  for (const { mark, x, y, box, align } of curve.markPlan) {
+    curve.text(context, LABEL_FONT, curve.palette.ink, align);
+    if (!taken.some((other) => boxesCollide(box, other))) curve.label(context, mark.label, x, y);
+  }
+}
+
+function visibleTicks(curve, context) {
+  curve.text(context, LABEL_FONT, curve.palette.muted, "center");
+  let edge = -Infinity;
+  return curve.clock.ticks.filter((tick) => {
+    const x = curve.frame.x(tick.t);
+    const half = context.measureText(tick.label).width / 2;
+    if (x < curve.frame.left - 1 || x > curve.frame.right + 1 || x - half < edge + TICK_GAP) return false;
+    edge = x + half;
+    return true;
+  });
+}
+</script>
+<script>
+const SPEEDS = [0.5, 1, 2, 4];
+const ICONS = {
+  play: "M4 2v12l10-6z",
+  pause: "M3.5 2h3v12h-3zM9.5 2h3v12h-3z",
+  replay: "M8 2.5V0L4.5 3 8 6V3.9a4.1 4.1 0 1 1-4.1 4.1H2.5A5.5 5.5 0 1 0 8 2.5z",
+};
+const SVG_SPACE = "http://www.w3.org/2000/svg";
+
+function element(tag, name, host) {
+  const made = document.createElement(tag);
+  made.className = name;
+  host.appendChild(made);
+  return made;
+}
+
+function iconButton(host) {
+  const button = element("button", "play", host);
+  const svg = document.createElementNS(SVG_SPACE, "svg");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  const path = document.createElementNS(SVG_SPACE, "path");
+  svg.appendChild(path);
+  button.appendChild(svg);
+  return [button, path];
+}
+
+class Controls {
+  constructor(host, clock, player) {
+    this.element = element("div", "controls", host);
+    [this.button, this.icon] = iconButton(this.element);
+    this.button.addEventListener("click", () => player.toggle());
+    this.speeds = this.speedButtons(player);
+    this.range = this.slider(clock, player.scrub);
+    this.state = {};
+  }
+
+  speedButtons(player) {
+    const group = element("div", "speeds", this.element);
+    return SPEEDS.map((speed) => {
+      const button = element("button", "", group);
+      button.textContent = `${speed}×`;
+      button.addEventListener("click", () => player.changeSpeed(speed));
+      return button;
+    });
+  }
+
+  slider(clock, scrub) {
+    const range = element("input", "scrub", this.element);
+    Object.assign(range, { type: "range", min: clock.start, max: clock.end, step: "any" });
+    range.setAttribute("aria-label", "Timeline");
+    range.addEventListener("pointerdown", () => scrub.begin(Number(range.value)));
+    range.addEventListener("input", () => scrub.move(Number(range.value)));
+    range.addEventListener("change", () => scrub.end());
+    return range;
+  }
+
+  update(clock) {
+    const icon = clock.playing ? "pause" : clock.finished ? "replay" : "play";
+    if (this.state.icon !== icon) {
+      this.icon.setAttribute("d", ICONS[icon]);
+      this.button.setAttribute("aria-label", icon);
+    }
+    if (this.state.speed !== clock.speed) {
+      SPEEDS.forEach((speed, index) => this.speeds[index].classList.toggle("on", speed === clock.speed));
+    }
+    this.range.value = clock.t;
+    this.range.style.setProperty("--done", `${(clock.share() * 100).toFixed(2)}%`);
+    this.state = { icon, speed: clock.speed };
+  }
+}
+</script>
+<script>
+const WHEEL_RATE = 0.0016;
+const PINCH_RATE = 0.012;
+const LINE_PIXELS = 16;
+const DRAG_FROM = 3;
+const TIP_OFFSET = 14;
+
+class Pointer {
+  constructor(player) {
+    this.player = player;
+    const host = player.host;
+    this.tip = element("div", "tip", player.root);
+    this.reset = element("button", "reset", host);
+    this.reset.textContent = "Reset view";
+    this.reset.addEventListener("click", () => this.release());
+    host.addEventListener("wheel", (event) => this.wheel(event), { passive: false });
+    host.addEventListener("pointerdown", (event) => this.grab(event));
+    host.addEventListener("pointermove", (event) => this.move(event));
+    host.addEventListener("pointerup", (event) => this.drop(event));
+    host.addEventListener("pointerleave", () => this.tip.classList.remove("on"));
+    host.addEventListener("dblclick", () => this.release());
+  }
+
+  local(event) {
+    const panel = this.player.panels.find((item) => item.element.contains(event.target)) || this.player.panels[0];
+    const box = panel.canvas.getBoundingClientRect();
+    const ratio = panel.view.ratio;
+    return [panel, (event.clientX - box.left) * ratio, (event.clientY - box.top) * ratio];
+  }
+
+  wheel(event) {
+    event.preventDefault();
+    const [panel, sx, sy] = this.local(event);
+    const delta = event.deltaY * (event.deltaMode ? LINE_PIXELS : 1);
+    const factor = Math.exp(-delta * (event.ctrlKey ? PINCH_RATE : WHEEL_RATE));
+    this.player.camera.zoomAt(panel.view, sx, sy, factor);
+    this.player.dirty = true;
+  }
+
+  grab(event) {
+    if (event.button !== 0 || event.target === this.reset) return;
+    this.drag = { x: event.clientX, y: event.clientY, moved: false };
+    this.player.host.setPointerCapture(event.pointerId);
+  }
+
+  move(event) {
+    if (!this.drag) return this.hover(event);
+    const [dx, dy] = [event.clientX - this.drag.x, event.clientY - this.drag.y];
+    if (!this.drag.moved && Math.hypot(dx, dy) < DRAG_FROM) return;
+    const [panel] = this.local(event);
+    this.drag = { x: event.clientX, y: event.clientY, moved: true };
+    this.player.host.classList.add("dragging");
+    this.tip.classList.remove("on");
+    this.player.camera.panBy(panel.view, dx * panel.view.ratio, dy * panel.view.ratio);
+    this.player.dirty = true;
+  }
+
+  drop(event) {
+    this.drag = null;
+    this.player.host.classList.remove("dragging");
+    if (this.player.host.hasPointerCapture(event.pointerId)) this.player.host.releasePointerCapture(event.pointerId);
+  }
+
+  release() {
+    this.player.camera.release();
+    this.player.dirty = true;
+  }
+
+  update() {
+    this.reset.classList.toggle("on", this.player.camera.user);
+  }
+
+  hover(event) {
+    const t = this.player.clock.t;
+    const panel = this.player.panels.find((item) => item.element.contains(event.target));
+    const node = panel ? panel.nearest(event.clientX, event.clientY, t) : -1;
+    if (node < 0) return this.tip.classList.remove("on");
+    const nodes = this.player.scene.nodes;
+    const copies = Math.round(panel.run.grow.valueAt(node, t));
+    this.tip.textContent = `${nodes.tips[nodes.tip[node]]}, ${counted(copies, "copy", "copies")} passed on`;
+    const box = this.player.root.getBoundingClientRect();
+    const left = Math.min(event.clientX - box.left + TIP_OFFSET, box.width - this.tip.offsetWidth - 8);
+    this.tip.style.left = `${left}px`;
+    this.tip.style.top = `${event.clientY - box.top + TIP_OFFSET}px`;
+    this.tip.classList.add("on");
+  }
+}
+</script>
+<script>
+const FADE_MS = 420;
+const CAPTION_MS = 7000;
+
+function showCaption(root, text) {
+  const caption = element("div", "caption", root);
+  caption.textContent = text;
+  window.setTimeout(() => caption.classList.add("faded"), CAPTION_MS);
+}
+
+function pixelRatio() {
+  return Math.min(2, window.devicePixelRatio || 1);
+}
+
+class Player {
+  constructor(root, scene) {
+    this.root = root;
+    this.scene = scene;
+    applyPalette(root, scene.palette, scene.font);
+    root.classList.toggle("record", isRecording());
+    root.classList.toggle("curved", recordOption("curve") !== null);
+    this.uiScale = overlayScale(root);
+    this.clock = new Clock(scene.clock, scene.timing.unitSeconds, scene.key);
+    this.motion = new Motion(scene.keys, scene.nodes.spike.length);
+    this.host = element("div", "panels", root);
+    element("div", "brand", root).textContent = scene.brand;
+    showCaption(root, scene.caption);
+    this.panels = scene.panels.map((panel) => new SkyPanel(this.host, scene, panel, this.motion));
+    this.camera = new Camera(this.panels[0].view);
+    warmSprites(scene.palette, scene.types.length);
+    const sprites = spritesFor(scene.palette, scene.types.length, lookFor(1));
+    this.dock = element("div", "dock", root);
+    buildLegend(this.dock, scene.legend, sprites, scene.palette, pixelRatio());
+    this.scrub = this.scrubber();
+    this.controls = new Controls(this.dock, this.clock, this);
+    this.curve = new GrowthCurve(this.dock, scene, this.scrub);
+    this.pointer = new Pointer(this);
+    document.addEventListener("keydown", (event) => this.key(event));
+    new ResizeObserver(() => this.resize()).observe(root);
+  }
+
+  scrubber() {
+    return {
+      begin: (t) => {
+        this.resume = this.resume || this.clock.playing;
+        this.clock.playing = false;
+        this.seek(t);
+      },
+      move: (t) => this.seek(t),
+      end: () => {
+        this.clock.playing = Boolean(this.resume) && !this.clock.finished;
+        this.resume = false;
+        this.dirty = true;
+      },
+    };
+  }
+
+  seek(t) {
+    this.clock.seek(t);
+    this.dirty = true;
+  }
+
+  toggle() {
+    if (this.clock.finished) return this.restart();
+    this.clock.playing = !this.clock.playing;
+    this.dirty = true;
+  }
+
+  changeSpeed(speed) {
+    this.clock.speed = speed;
+    this.dirty = true;
+  }
+
+  restart() {
+    this.root.classList.add("fading");
+    window.setTimeout(() => {
+      this.seek(this.clock.start);
+      this.clock.playing = true;
+      this.root.classList.remove("fading");
+    }, FADE_MS);
+  }
+
+  key(event) {
+    const steps = { ArrowLeft: -1, ArrowRight: 1 };
+    if (event.target.closest("button, input")) return;
+    if (event.code === "Space") this.toggle();
+    else if (event.code in steps) this.seek(this.clock.t + steps[event.code]);
+    else return;
+    event.preventDefault();
+  }
+
+  resize() {
+    const ratio = pixelRatio();
+    const bottom = this.dock.offsetHeight;
+    this.root.style.setProperty("--dock", `${bottom}px`);
+    const room = Math.max(bottom, Number(recordOption("room")) || 0);
+    this.root.style.setProperty("--room", `${room}px`);
+    for (const panel of this.panels) panel.resize(ratio, room);
+    this.curve.resize(ratio, this.uiScale);
+    this.dirty = true;
+    if (!this.started) this.start();
+  }
+
+  start() {
+    this.started = true;
+    this.camera.now = this.camera.fit(this.locate());
+    this.render();
+    this.root.classList.add("ready");
+    if (!isRecording()) requestAnimationFrame((now) => this.frame(now));
+  }
+
+  locate() {
+    const t = this.clock.t;
+    this.motion.place(t);
+    let box = null;
+    for (const panel of this.panels) {
+      panel.place(t, this.motion);
+      box = panel.extendBox(box, t);
+    }
+    return box;
+  }
+
+  frame(now) {
+    const seconds = this.last === undefined ? 0 : Math.min((now - this.last) / 1000, LONGEST_STEP);
+    this.last = now;
+    const advanced = this.clock.advance(seconds);
+    const moving = this.camera.step(seconds, this.locate());
+    if (advanced || moving || this.dirty) {
+      this.render();
+      this.clock.save(now);
+    }
+    requestAnimationFrame((time) => this.frame(time));
+  }
+
+  render() {
+    const t = this.clock.t;
+    const stamp = clockLabel(this.scene.clock, t);
+    for (const panel of this.panels) panel.draw(t, this.camera.now, stamp, this.scene.hud);
+    this.curve.draw(t);
+    this.controls.update(this.clock);
+    this.pointer.update();
+    this.dirty = false;
+  }
+}
+
+window.player = new Player(document.getElementById("player"), JSON.parse(document.getElementById("scene").textContent));
+</script>
+<script>
+const PlayerRecord = {
+  renderAt(t, zoom) {
+    this.clock.seek(t);
+    const box = this.locate();
+    if (recordOption("final") === null) this.camera.step(RECORD_STEP, box);
+    else this.camera.now = this.finalFrame(zoom || 1);
+    this.render();
+  },
+
+  finalFrame(zoom) {
+    let box = null;
+    for (const panel of this.panels) box = panel.extendBox(box, this.clock.end);
+    const [fit, x, y] = this.camera.fit(box);
+    return [fit * zoom, x, y];
+  },
+};
+
+Object.assign(Player.prototype, PlayerRecord);
+</script>
+<button class="menu-toggle" aria-label="Open the menu" aria-expanded="false">
+<svg viewBox="0 0 20 20"><path d="M3 5h14M3 10h14M3 15h14"/></svg>
+</button>
+<nav class="menu" aria-label="Menu">
+<div class="menu-head">
+<a class="menu-brand" href="../index.html"><svg class="menu-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Skill Constellations">
+  <defs>
+    <radialGradient id="logo-sky" cx="0.42" cy="0.45" r="0.75">
+      <stop offset="0" stop-color="#0C1426"/>
+      <stop offset="1" stop-color="#03050B"/>
+    </radialGradient>
+    <radialGradient id="logo-glow">
+      <stop offset="0" stop-color="#8DB3FF" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#8DB3FF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="1" y="1" width="62" height="62" rx="14" fill="url(#logo-sky)" stroke="#1D2538" stroke-width="1.5"/>
+  <g stroke="#7393DC" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M17 35.5 L30 19.5 L43 11.5"/>
+    <path d="M30 19.5 L46 23.5"/>
+    <path d="M17 35.5 L37 36.5 L50 41.5"/>
+    <path d="M17 35.5 L28 48.5 L41 52.5"/>
+  </g>
+  <g fill="url(#logo-glow)">
+    <circle cx="30" cy="19.5" r="6"/>
+    <circle cx="37" cy="36.5" r="6"/>
+    <circle cx="28" cy="48.5" r="5.5"/>
+    <circle cx="43" cy="11.5" r="4.5"/>
+    <circle cx="46" cy="23.5" r="4.5"/>
+    <circle cx="50" cy="41.5" r="4.5"/>
+    <circle cx="41" cy="52.5" r="4"/>
+  </g>
+  <g fill="#F5F7FF">
+    <circle cx="30" cy="19.5" r="2.7"/>
+    <circle cx="37" cy="36.5" r="2.7"/>
+    <circle cx="28" cy="48.5" r="2.4"/>
+    <circle cx="43" cy="11.5" r="2"/>
+    <circle cx="46" cy="23.5" r="2"/>
+    <circle cx="50" cy="41.5" r="2"/>
+    <circle cx="41" cy="52.5" r="1.8"/>
+  </g>
+  <circle cx="17" cy="35.5" r="5.4" fill="#03050B" stroke="#F2C35A" stroke-width="2"/>
+  <circle cx="17" cy="35.5" r="2.5" fill="#F5F7FF"/>
+</svg>
+<span>Skill Constellations</span></a>
+<button class="menu-close" aria-label="Close the menu">
+<svg viewBox="0 0 20 20"><path d="M5 5l10 10M15 5L5 15"/></svg>
+</button>
+</div>
+<a class="menu-link" href="../index.html">Repository network</a>
+<section class="menu-section">
+<h2>Skill constellation</h2>
+<select class="menu-picker" aria-label="Skill"><option value="" disabled hidden>Choose a skill</option><optgroup label="Most adopted"><option value="../skills/frontend-design.html">frontend-design</option><option value="../skills/skill-creator.html">skill-creator</option><option value="../skills/brainstorming.html">brainstorming</option><option value="../skills/ui-ux-pro-max.html">ui-ux-pro-max</option><option value="../skills/vercel-react-best-practices.html">vercel-react-best-practices</option><option value="../skills/systematic-debugging.html">systematic-debugging</option><option value="../skills/pdf.html">pdf</option><option value="../skills/test-driven-development.html">test-driven-development</option><option value="../skills/mcp-builder.html">mcp-builder</option><option value="../skills/writing-plans.html">writing-plans</option><option value="../skills/xlsx.html">xlsx</option><option value="../skills/subagent-driven-development.html">subagent-driven-development</option><option value="../skills/verification-before-completion.html">verification-before-completion</option><option value="../skills/writing-skills.html">writing-skills</option><option value="../skills/dispatching-parallel-agents.html">dispatching-parallel-agents</option><option value="../skills/docx.html">docx</option><option value="../skills/pptx.html">pptx</option><option value="../skills/agent-browser.html">agent-browser</option><option value="../skills/grill-me.html">grill-me</option><option value="../skills/webapp-testing.html">webapp-testing</option><option value="../skills/using-git-worktrees.html">using-git-worktrees</option><option value="../skills/executing-plans.html">executing-plans</option><option value="../skills/requesting-code-review.html">requesting-code-review</option><option value="../skills/receiving-code-review.html">receiving-code-review</option><option value="../skills/web-design-guidelines.html">web-design-guidelines</option><option value="../skills/openspec-apply-change.html" selected>openspec-apply-change</option><option value="../skills/openspec-explore.html">openspec-explore</option><option value="../skills/find-skills.html">find-skills</option><option value="../skills/finishing-a-development-branch.html">finishing-a-development-branch</option><option value="../skills/openspec-archive-change.html">openspec-archive-change</option></optgroup><optgroup label="Most adopted high-risk"><option value="../skills/frontend-design.html">frontend-design</option><option value="../skills/skill-creator.html">skill-creator</option><option value="../skills/brainstorming.html">brainstorming</option><option value="../skills/ui-ux-pro-max.html">ui-ux-pro-max</option><option value="../skills/systematic-debugging.html">systematic-debugging</option><option value="../skills/pdf.html">pdf</option><option value="../skills/test-driven-development.html">test-driven-development</option><option value="../skills/mcp-builder.html">mcp-builder</option><option value="../skills/writing-plans.html">writing-plans</option><option value="../skills/xlsx.html">xlsx</option><option value="../skills/subagent-driven-development.html">subagent-driven-development</option><option value="../skills/verification-before-completion.html">verification-before-completion</option><option value="../skills/writing-skills.html">writing-skills</option><option value="../skills/dispatching-parallel-agents.html">dispatching-parallel-agents</option><option value="../skills/docx.html">docx</option><option value="../skills/pptx.html">pptx</option><option value="../skills/agent-browser.html">agent-browser</option><option value="../skills/grill-me.html">grill-me</option><option value="../skills/webapp-testing.html">webapp-testing</option><option value="../skills/using-git-worktrees.html">using-git-worktrees</option><option value="../skills/executing-plans.html">executing-plans</option><option value="../skills/requesting-code-review.html">requesting-code-review</option><option value="../skills/receiving-code-review.html">receiving-code-review</option><option value="../skills/openspec-apply-change.html">openspec-apply-change</option><option value="../skills/find-skills.html">find-skills</option><option value="../skills/finishing-a-development-branch.html">finishing-a-development-branch</option><option value="../skills/openspec-archive-change.html">openspec-archive-change</option><option value="../skills/improve-codebase-architecture.html">improve-codebase-architecture</option><option value="../skills/shadcn.html">shadcn</option><option value="../skills/canvas-design.html">canvas-design</option></optgroup></select>
+</section>
+
+<div class="menu-links">
+<a href="https://github.com/FahdSeddik/Skill-Constellations" target="_blank" rel="noopener">GitHub repository</a>
+<a href="https://github.com/FahdSeddik/Skill-Constellations/releases/tag/data-v1.0" target="_blank" rel="noopener">Data</a>
+</div>
+</nav>
+<script>
+const MENU_KEY = "skillnet-menu";
+const MENU_WIDE = window.matchMedia("(min-width: 721px)");
+
+function setMenu(open, remember) {
+  document.body.classList.toggle("menu-open", open);
+  document.querySelector(".menu-toggle").setAttribute("aria-expanded", String(open));
+  if (remember && MENU_WIDE.matches) writeStore(MENU_KEY, open);
+}
+
+function bindSwitch(button, apply) {
+  button.addEventListener("click", () => {
+    const on = button.getAttribute("aria-pressed") !== "true";
+    button.setAttribute("aria-pressed", String(on));
+    apply(on);
+  });
+}
+
+function bindSky(sky) {
+  const names = document.querySelector('[data-toggle="names"]');
+  const colour = document.querySelector('[data-toggle="colour"]');
+  if (!names || !colour) return;
+  names.setAttribute("aria-pressed", String(sky.namesOn));
+  colour.setAttribute("aria-pressed", String(sky.scene.clumps.coloured));
+  bindSwitch(names, (on) => sky.setNames(on));
+  bindSwitch(colour, (on) => sky.setColoured(on));
+}
+
+function bindMenu() {
+  setMenu(MENU_WIDE.matches && !isRecording() && readStore(MENU_KEY) !== false, false);
+  document.querySelector(".menu-toggle").addEventListener("click", () => setMenu(true, true));
+  document.querySelector(".menu-close").addEventListener("click", () => setMenu(false, true));
+  document.querySelector(".menu-picker").addEventListener("change", (event) => {
+    window.location.href = event.target.value;
+  });
+  if (window.skyView) bindSky(window.skyView);
+}
+
+bindMenu();
+</script></body>
+</html>

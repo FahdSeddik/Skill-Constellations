@@ -1,0 +1,1966 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--sky); }
+.brand {
+  position: absolute; right: 22px; top: 20px; z-index: 3; pointer-events: none;
+  font-size: 11px; letter-spacing: 0.34em; text-transform: uppercase; color: var(--muted); opacity: 0.75;
+  text-shadow: 0 0 6px var(--sky), 0 0 2px var(--sky);
+}
+.caption {
+  position: absolute; left: 50%; bottom: calc(var(--dock, 96px) + 14px); z-index: 3; max-width: min(820px, 70vw); transform: translateX(-50%);
+  pointer-events: none; text-align: center; font-size: 13px; line-height: 1.45; color: var(--muted);
+  text-shadow: 0 0 8px var(--sky), 0 0 3px var(--sky); opacity: 0.95; transition: opacity 1600ms ease;
+}
+.caption.faded { opacity: 0; }
+.dock {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  background: linear-gradient(to bottom, transparent, var(--sky) 34px);
+}
+.legend {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; padding: 26px 22px 6px;
+  font-size: 12.5px; color: var(--muted); text-shadow: 0 0 6px var(--sky);
+}
+.legend .item { display: inline-flex; align-items: center; gap: 8px; }
+.legend canvas { width: 24px; height: 18px; }
+.controls { display: flex; align-items: center; gap: 16px; padding: 6px 22px 14px; }
+.play {
+  flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; padding: 0; cursor: pointer;
+  border: 1px solid var(--muted); background: transparent; color: var(--ink); display: grid; place-items: center;
+}
+.play:hover, .play:focus-visible { border-color: var(--ink); outline: none; }
+.play svg { width: 13px; height: 13px; fill: currentColor; }
+.speeds { flex: 0 0 auto; display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.speeds button {
+  background: transparent; border: 0; color: var(--muted); font: inherit; font-size: 12.5px;
+  padding: 5px 11px; cursor: pointer; font-variant-numeric: lining-nums;
+}
+.speeds button:hover { color: var(--ink); }
+.speeds button.on { color: var(--sky); background: var(--ink); }
+.scrub { flex: 1 1 auto; min-width: 80px; margin: 0; height: 22px; background: transparent; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.scrub:focus { outline: none; }
+.scrub::-webkit-slider-runnable-track {
+  height: 3px; border-radius: 3px;
+  background: linear-gradient(to right, var(--ink) 0 var(--done), var(--line) var(--done) 100%);
+}
+.scrub::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 13px; height: 13px; margin-top: -5px; border-radius: 50%;
+  background: var(--star); box-shadow: 0 0 10px var(--glow);
+}
+.scrub::-moz-range-track { height: 3px; border-radius: 3px; background: var(--line); }
+.scrub::-moz-range-progress { height: 3px; border-radius: 3px; background: var(--ink); }
+.scrub::-moz-range-thumb { width: 13px; height: 13px; border: 0; border-radius: 50%; background: var(--star); }
+.reset {
+  position: absolute; right: 18px; z-index: 3; padding: 5px 12px; border-radius: 999px;
+  font: inherit; font-size: 12.5px; color: var(--ink); background: var(--haze); border: 1px solid var(--line);
+  cursor: pointer; opacity: 0; pointer-events: none; transition: opacity 200ms ease;
+}
+.reset.on { opacity: 1; pointer-events: auto; }
+.reset:hover { border-color: var(--muted); }
+.tip {
+  position: absolute; z-index: 4; pointer-events: none; padding: 5px 9px; white-space: nowrap;
+  font-size: 12.5px; color: var(--ink); background: var(--haze); border: 1px solid var(--line);
+  border-radius: 6px; opacity: 0; transition: opacity 120ms ease;
+}
+.tip.on { opacity: 1; }
+.record, .record * { transition: none !important; animation: none !important; }
+.record .curve { position: absolute; left: 0; right: 0; bottom: 0; visibility: hidden; }
+.record.curved .curve { position: relative; visibility: visible; height: calc(156px * var(--ui, 1)); }
+.record .controls, .record .caption, .record .legend .toggles, .record .reset, .record .tip { display: none; }
+.record .hud, .record .legend { zoom: var(--ui, 1); }
+.record .legend { justify-content: center; }
+.record:not(.curved) .legend { padding-bottom: calc(54px / var(--ui, 1)); }
+.record .hud .title { font-size: 15px; color: var(--ink); }
+
+.sky {
+  position: fixed; inset: 0; overflow: hidden; background: var(--sky); color: var(--ink);
+  font-family: var(--font); user-select: none;
+}
+.stage { position: absolute; inset: 0; cursor: grab; touch-action: none; opacity: 0; transition: opacity 600ms ease; }
+.surface { position: absolute; inset: 0; width: 100%; height: 100%; display: none; }
+.surface.on { display: block; }
+.sky.ready .stage { opacity: 1; }
+.sky.dragging .stage { cursor: grabbing; }
+.hud { position: absolute; left: 68px; top: 16px; z-index: 3; pointer-events: none; text-shadow: 0 0 6px var(--sky), 0 0 2px var(--sky); }
+.hud .stamp { font-size: 25px; line-height: 1.25; font-variant-numeric: lining-nums tabular-nums; }
+.hud .note { font-size: 13px; color: var(--muted); min-height: 1.3em; font-variant-numeric: lining-nums tabular-nums; }
+.loading {
+  position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%); z-index: 3;
+  font-size: 14px; color: var(--muted); letter-spacing: 0.04em; transition: opacity 500ms ease;
+}
+.loading.done { opacity: 0; pointer-events: none; }
+.reset { bottom: calc(var(--dock, 96px) + 10px); }
+.swatch { display: inline-block; flex: 0 0 auto; position: relative; width: 26px; height: 14px; }
+.swatch.star::before, .swatch.field::before, .swatch.sparkle::before {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 5px; height: 5px; border-radius: 50%;
+  transform: translate(-50%, -50%); background: var(--star); box-shadow: 0 0 7px 2px var(--glow);
+}
+.swatch.field::before { width: 3px; height: 3px; background: var(--muted); box-shadow: none; opacity: 0.8; }
+.swatch.sparkle::after {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 15px; height: 15px; transform: translate(-50%, -50%);
+  background: linear-gradient(var(--star), var(--star)) center / 1px 100% no-repeat,
+    linear-gradient(var(--star), var(--star)) center / 100% 1px no-repeat;
+  opacity: 0.75;
+}
+.swatch.origin::before, .swatch.copy::before, .swatch.risk::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px;
+  background: linear-gradient(to right, transparent, var(--trail)); opacity: 0.75;
+}
+.swatch.copy::before { height: 2px; margin-top: -1px; background: linear-gradient(to right, transparent, var(--glow)); opacity: 1; box-shadow: 0 0 6px var(--glow); }
+.swatch.risk::before { background: linear-gradient(to right, transparent, var(--risk)); opacity: 1; }
+.legend .item.risk { display: none; }
+.sky.risky .legend .item.risk { display: inline-flex; }
+.legend .toggles { margin-left: auto; display: inline-flex; gap: 8px; }
+.legend .toggle {
+  padding: 4px 12px; border-radius: 999px; cursor: pointer; font: inherit; font-size: 12.5px;
+  color: var(--muted); background: transparent; border: 1px solid var(--line);
+}
+.legend .toggle:hover { color: var(--ink); border-color: var(--muted); }
+.legend .toggle.risk[aria-pressed="true"] { color: var(--sky); background: var(--risk); border-color: var(--risk); }
+.legend .toggle.names[aria-pressed="true"] { color: var(--sky); background: var(--ink); border-color: var(--ink); }
+.clumps { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; transition: opacity 300ms ease; }
+.clumps.off { opacity: 0 !important; }
+.clump {
+  position: absolute; left: 0; top: 0; white-space: nowrap; color: var(--star); opacity: 0; letter-spacing: 0.015em;
+  font-family: var(--label-font); font-weight: 600; padding: 2px 9px; border-radius: 999px; transform-origin: 0 0;
+  background: color-mix(in srgb, var(--sky) 62%, transparent); border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  text-shadow: 0 0 2px var(--sky), 0 0 6px var(--sky); transition: opacity 450ms ease; will-change: transform, opacity;
+}
+.record.still .hud .note { display: none; }
+.record .hud::before {
+  content: ""; position: absolute; z-index: -1; inset: -36px -96px -36px -96px; pointer-events: none;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--sky) 80%, transparent), transparent);
+}
+</style>
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Repository network | Skill Constellations</title><style>:root { --sky: #03050B; --haze: #0C1426; --star: #F5F7FF; --glow: #8DB3FF; --trail: #7393DC; --risk: #FF6B47; --mark: #F2C35A; --ink: #E8ECF5; --muted: #8892A8; --line: #1D2538; --label-font: 'Inter', 'Segoe UI', 'Helvetica Neue', 'DejaVu Sans', Arial, sans-serif; --menu-width: 280px; }
+.menu, .menu-toggle { font-family: var(--label-font); color: var(--ink); }
+.menu-toggle {
+  position: fixed; left: 14px; top: 14px; z-index: 20; width: 40px; height: 40px; padding: 0; cursor: pointer;
+  display: grid; place-items: center; background: var(--haze); border: 1px solid var(--line); border-radius: 8px;
+}
+.menu-toggle:hover, .menu-close:hover { border-color: var(--muted); }
+.menu-toggle svg, .menu-close svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+body.menu-open .menu-toggle { display: none; }
+.menu {
+  display: none; position: fixed; left: 0; top: 0; bottom: 0; width: var(--menu-width); z-index: 30; box-sizing: border-box;
+  flex-direction: column; gap: 22px; padding: 16px; overflow-y: auto; background: var(--sky); border-right: 1px solid var(--line);
+}
+body.menu-open .menu { display: flex; }
+body.menu-open .sky, body.menu-open .player { left: var(--menu-width); }
+.menu-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.menu-brand { display: flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font-size: 15px; font-weight: 600; }
+.menu-logo { width: 28px; height: 28px; flex: 0 0 auto; }
+.menu-close {
+  width: 34px; height: 34px; padding: 0; cursor: pointer; display: grid; place-items: center;
+  color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 8px;
+}
+.menu-link, .menu-links a { color: var(--ink); text-decoration: none; font-size: 14px; }
+.menu-link:hover, .menu-links a:hover { color: var(--glow); }
+.menu-section { display: flex; flex-direction: column; gap: 8px; }
+.menu-section h2 { margin: 0; font-size: 11px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.menu-picker {
+  width: 100%; padding: 8px 10px; font: inherit; font-size: 13.5px; color: var(--ink);
+  background: var(--haze); border: 1px solid var(--line); border-radius: 8px;
+}
+.menu-switch {
+  padding: 8px 12px; text-align: left; font: inherit; font-size: 13.5px; cursor: pointer;
+  color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 8px;
+}
+.menu-switch:hover { color: var(--ink); border-color: var(--muted); }
+.menu-switch[aria-pressed="true"] { color: var(--sky); background: var(--ink); border-color: var(--ink); }
+.menu-links { display: flex; gap: 18px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); }
+.sky .legend .toggle.names, .sky .brand, .player .brand { display: none; }
+@media (max-width: 720px) {
+  body.menu-open .sky, body.menu-open .player { left: 0; }
+  .clump { max-width: calc(100vw - 28px); overflow: hidden; text-overflow: ellipsis; box-sizing: border-box; }
+  .menu { width: min(300px, 86vw); box-shadow: 0 0 40px var(--sky); }
+}
+.record ~ .menu, .record ~ .menu-toggle { display: none; }
+</style></head>
+<body>
+<div id="sky" class="sky"></div>
+<script id="scene" type="application/json">{"data":"sky.bin","origin":"2025-09-29","weeks":{"births":[32,40,610,1593,1128,1426,1208,1860,1406,1627,1823,2929,3687,6020,7319,10378,15243,16049,24579,28812,27644,33682,37791,43633,53935,47662,48965,57564,54589,54099,47543,48981,53053,58114,51241,60891,60218,52111,48921,53186,53393,19016,1092],"arrivals":[2,0,41,201,297,394,421,1125,995,803,814,1682,1537,1362,2482,6280,10077,10913,13884,19894,19021,22966,34382,33089,39463,47322,51558,50170,42331,44216,37880,45587,39313,41243,48286,37628,51426,46404,36162,36483,40276,21375,923],"copies":[0,0,0,10,11,15,17,35,15,18,26,26,45,37,81,102,180,298,316,321,388,391,485,598,728,786,842,1020,903,822,781,836,871,810,853,781,867,863,835,855,881,506,27]},"clock":{"start":0.0,"end":43.4},"types":["Unlabelled repository","Aggregator catalog","Starter template","Self-copying owner","Bot-generated","Coordinated cluster","Ordinary project","Other"],"roles":["mainly an adopter","mainly a copy source"],"field":"shares no skill with another repository","caption":"Each star is a repository, placed near the repositories with which it shares skills. Each line is an adoption of a skill, drawn from the first adopter of the skill, and a brighter line is an identified copy, drawn from its source.","legend":{"items":[{"kind":"star","label":"A repository, brighter when it holds more skills"},{"kind":"sparkle","label":"A new skill"},{"kind":"origin","label":"An adoption, drawn from the first adopter of the skill"},{"kind":"copy","label":"An identified copy, drawn from its source"},{"kind":"risk","label":"An adoption of a high-risk skill"},{"kind":"field","label":"A repository that shares no skill with another repository"}],"names":"Cluster names","risk":"Highlight high-risk skills"},"loading":"Loading the repository network","failed":"The repository network could not be loaded.","clumps":{"items":[{"x":1895,"y":1738,"size":7264,"colour":0,"label":"Frontend design and engineering workflows"},{"x":2278,"y":1977,"size":6082,"colour":1,"label":"React and web frontend development"},{"x":2101,"y":2315,"size":4825,"colour":2,"label":"Office documents and design toolkit"},{"x":1584,"y":2177,"size":4487,"colour":3,"label":"OpenClaw personal assistant skills"},{"x":2197,"y":2492,"size":3940,"colour":4,"label":"Large all-purpose skill collections"},{"x":2129,"y":2417,"size":2889,"colour":5,"label":"Bioinformatics and life science research"},{"x":2188,"y":1976,"size":2284,"colour":3,"label":"UI/UX and visual design"},{"x":2341,"y":2198,"size":2090,"colour":3,"label":"Copilot general software development skills"},{"x":2482,"y":1479,"size":1896,"colour":5,"label":"Laravel PHP web app development"},{"x":1554,"y":1730,"size":1770,"colour":1,"label":"Vendor platform and API integrations"},{"x":1479,"y":2334,"size":1762,"colour":2,"label":"OpenSpec spec-driven change workflow"},{"x":1746,"y":1857,"size":1629,"colour":5,"label":"Browser automation and web design"},{"x":1954,"y":2365,"size":1579,"colour":1,"label":"Software team workflow role reviews"},{"x":2387,"y":2406,"size":1371,"colour":0,"label":"Coding best practices for agents"},{"x":1830,"y":2037,"size":1355,"colour":2,"label":"Skill validation test fixtures"},{"x":1580,"y":1412,"size":1166,"colour":4,"label":"Spec-driven feature development workflow"},{"x":1514,"y":1829,"size":1113,"colour":5,"label":"iOS and Android mobile development"},{"x":2010,"y":1844,"size":1063,"colour":5,"label":"Mastra agents, slides, Unity tooling"},{"x":1151,"y":2071,"size":1030,"colour":5,"label":"FastAPI and Databricks development"},{"x":1851,"y":1533,"size":894,"colour":5,"label":"Browser automation, Japanese tech writing"},{"x":1311,"y":2238,"size":863,"colour":2,"label":"Hermes agent bundled skills"},{"x":1930,"y":1659,"size":827,"colour":3,"label":"Nx monorepos and Angular development"},{"x":2179,"y":2293,"size":728,"colour":3,"label":"Website SEO auditing and optimization"},{"x":1733,"y":2361,"size":712,"colour":1,"label":"Cybersecurity threat detection and testing"},{"x":1864,"y":2179,"size":700,"colour":5,"label":"Thinker personas and Obsidian notes"},{"x":1347,"y":1467,"size":672,"colour":5,"label":"Agile multi-agent software development"},{"x":1984,"y":1573,"size":621,"colour":3,"label":"Cursor agent and Rails toolkit"},{"x":1444,"y":1966,"size":606,"colour":3,"label":"Academic research and paper writing"},{"x":1425,"y":1725,"size":589,"colour":5,"label":"Google Workspace and agent orchestration"},{"x":1928,"y":1526,"size":553,"colour":5,"label":"Building LangChain and LangGraph agents"},{"x":1869,"y":2722,"size":544,"colour":3,"label":"Go programming best practices"},{"x":1131,"y":1656,"size":506,"colour":4,"label":"Firebase and Genkit app development"},{"x":2218,"y":2591,"size":477,"colour":5,"label":"Neon serverless Postgres databases"},{"x":1623,"y":1641,"size":435,"colour":4,"label":"Security testing and exploitation tools"},{"x":2072,"y":1636,"size":435,"colour":1,"label":"Codebase knowledge graph tools"},{"x":2228,"y":1363,"size":428,"colour":2,"label":"Codebase knowledge graphs, legacy analysis"},{"x":1486,"y":1647,"size":404,"colour":2,"label":"AI audio and cloud development"},{"x":2180,"y":1172,"size":382,"colour":5,"label":"Convex backend app development"},{"x":2481,"y":1813,"size":357,"colour":2,"label":"Flutter and Dart app development"},{"x":2254,"y":1447,"size":352,"colour":2,"label":".NET testing and performance"},{"x":1853,"y":2580,"size":333,"colour":3,"label":"Spec-driven development workflow"},{"x":1842,"y":1370,"size":299,"colour":5,"label":"Building Google ADK AI agents"},{"x":1580,"y":2078,"size":262,"colour":0,"label":"Multimedia AI and thinking tools"},{"x":1808,"y":1042,"size":260,"colour":1,"label":"Replit app-building agent skills"},{"x":2692,"y":2030,"size":223,"colour":4,"label":"Spec-driven AI coding workflow"},{"x":1381,"y":1599,"size":193,"colour":2,"label":"Unity game editor automation"},{"x":1294,"y":1572,"size":183,"colour":5,"label":"PixiJS v8 web graphics"},{"x":1840,"y":1298,"size":144,"colour":5,"label":"Unity scene building and BIM workflows"},{"x":1352,"y":2583,"size":101,"colour":1,"label":"Java and Spring Boot development"},{"x":2597,"y":1926,"size":100,"colour":3,"label":"Full software development workflow kit"}],"coloured":false},"palette":{"sky":"#03050B","haze":"#0C1426","star":"#F5F7FF","glow":"#8DB3FF","trail":"#7393DC","risk":"#FF6B47","mark":"#F2C35A","ink":"#E8ECF5","muted":"#8892A8","line":"#1D2538","tints":["#8772A0","#3AA082","#D05FE2","#607564","#8F7D4D","#625660"]},"font":"Georgia, 'Times New Roman', serif","labelFont":"'Inter', 'Segoe UI', 'Helvetica Neue', 'DejaVu Sans', Arial, sans-serif","key":"sky","brand":"Skill Constellations"}</script>
+<script>
+function upperBound(values, target, low = 0, high = values.length) {
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (values[middle] <= target) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
+function lowerBound(values, target, low = 0, high = values.length) {
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (values[middle] < target) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
+function clampUnit(value) {
+  return Math.min(1, Math.max(0, value));
+}
+
+function smooth(share) {
+  return share * share * (3 - 2 * share);
+}
+
+function easeOut(share) {
+  return 1 - Math.pow(1 - share, 3);
+}
+
+function easeInOut(share) {
+  return share < 0.5 ? 4 * share * share * share : 1 - Math.pow(2 - 2 * share, 3) / 2;
+}
+</script>
+<script>
+const TINT_WHITENING = 0.3;
+
+function hexToRgb(hex) {
+  const value = parseInt(hex.slice(1), 16);
+  return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+}
+
+function rgba(hex, alpha) {
+  const [red, green, blue] = hexToRgb(hex);
+  return `rgba(${red},${green},${blue},${alpha})`;
+}
+
+function mixHex(base, other, share) {
+  const from = hexToRgb(base);
+  const to = hexToRgb(other);
+  const mixed = from.map((value, index) => Math.round(value + (to[index] - value) * share));
+  return "#" + mixed.map((value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+function isDark(hex) {
+  const [red, green, blue] = hexToRgb(hex);
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue < 128;
+}
+
+function glowBlend(palette) {
+  return isDark(palette.sky) ? "lighter" : "multiply";
+}
+
+function applyPalette(element, palette, font, labelFont = font) {
+  for (const [name, value] of Object.entries(palette)) {
+    if (typeof value === "string") element.style.setProperty(`--${name}`, value);
+  }
+  element.style.setProperty("--font", font);
+  element.style.setProperty("--label-font", labelFont);
+}
+
+function tintColors(palette, count) {
+  const tints = [palette.glow];
+  for (let index = 1; index < count; index += 1) {
+    const base = palette.tints[(index - 1) % palette.tints.length];
+    tints.push(mixHex(base, palette.star, TINT_WHITENING));
+  }
+  return tints;
+}
+
+function ditherOffset(index) {
+  let hash = Math.imul(index ^ 0x9e3779b9, 0x85ebca6b);
+  hash = Math.imul(hash ^ (hash >>> 13), 0xc2b2ae35);
+  return ((hash ^ (hash >>> 16)) >>> 0) / 4294967296 - 0.5;
+}
+
+function paintHaze(canvas, palette) {
+  const { width, height } = canvas;
+  const context = canvas.getContext("2d");
+  const image = context.createImageData(width, height);
+  const [inner, outer] = [hexToRgb(palette.haze), hexToRgb(palette.sky)];
+  const [x, y, reach] = [width / 2, height * 0.46, Math.hypot(width, height) * 0.62];
+  for (let pixel = 0; pixel < width * height; pixel += 1) {
+    const share = Math.min(1, Math.hypot((pixel % width) - x, Math.floor(pixel / width) - y) / reach);
+    const offset = ditherOffset(pixel);
+    for (let channel = 0; channel < 3; channel += 1) {
+      image.data[4 * pixel + channel] = inner[channel] + (outer[channel] - inner[channel]) * share + offset;
+    }
+    image.data[4 * pixel + 3] = 255;
+  }
+  context.putImageData(image, 0, 0);
+}
+</script>
+<script>
+const LONGEST_STEP = 0.1;
+const SAVE_EVERY_MS = 400;
+const RECORD_STEP = 1 / 30;
+
+function isRecording() {
+  return new URLSearchParams(window.location.search).has("record");
+}
+
+function recordOption(name) {
+  return isRecording() ? new URLSearchParams(window.location.search).get(name) : null;
+}
+
+function overlayScale(root) {
+  const scale = Number(recordOption("ui")) || 1;
+  root.style.setProperty("--ui", String(scale));
+  return scale;
+}
+
+function readStore(key) {
+  try {
+    return JSON.parse(window.sessionStorage.getItem(key));
+  } catch {
+    return null;
+  }
+}
+
+function writeStore(key, value) {
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    return;
+  }
+}
+
+class Clock {
+  constructor(spec, unitSeconds, key) {
+    this.start = spec.start;
+    this.end = spec.end;
+    this.unitSeconds = unitSeconds;
+    this.key = `skillnet-player-${key}`;
+    this.t = spec.start;
+    this.speed = 1;
+    this.playing = true;
+    this.savedAt = 0;
+    this.restore(readStore(this.key));
+  }
+
+  restore(saved) {
+    if (!saved) return;
+    this.t = Math.min(Math.max(saved.t, this.start), this.end);
+    this.speed = saved.speed;
+    this.playing = saved.playing && this.t < this.end;
+  }
+
+  save(now) {
+    if (now - this.savedAt < SAVE_EVERY_MS) return;
+    writeStore(this.key, { t: this.t, speed: this.speed, playing: this.playing });
+    this.savedAt = now;
+  }
+
+  advance(seconds) {
+    if (!this.playing) return false;
+    const step = Math.min(seconds, LONGEST_STEP) * this.speed;
+    this.t = Math.min(this.end, this.t + step / this.unitSeconds);
+    if (this.t >= this.end) this.playing = false;
+    return true;
+  }
+
+  seek(t) {
+    this.t = Math.min(Math.max(t, this.start), this.end);
+    this.savedAt = 0;
+  }
+
+  get finished() {
+    return this.t >= this.end;
+  }
+
+  share() {
+    return (this.t - this.start) / (this.end - this.start);
+  }
+}
+</script>
+<script>
+const SPEEDS = [0.5, 1, 2, 4];
+const ICONS = {
+  play: "M4 2v12l10-6z",
+  pause: "M3.5 2h3v12h-3zM9.5 2h3v12h-3z",
+  replay: "M8 2.5V0L4.5 3 8 6V3.9a4.1 4.1 0 1 1-4.1 4.1H2.5A5.5 5.5 0 1 0 8 2.5z",
+};
+const SVG_SPACE = "http://www.w3.org/2000/svg";
+
+function element(tag, name, host) {
+  const made = document.createElement(tag);
+  made.className = name;
+  host.appendChild(made);
+  return made;
+}
+
+function iconButton(host) {
+  const button = element("button", "play", host);
+  const svg = document.createElementNS(SVG_SPACE, "svg");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  const path = document.createElementNS(SVG_SPACE, "path");
+  svg.appendChild(path);
+  button.appendChild(svg);
+  return [button, path];
+}
+
+class Controls {
+  constructor(host, clock, player) {
+    this.element = element("div", "controls", host);
+    [this.button, this.icon] = iconButton(this.element);
+    this.button.addEventListener("click", () => player.toggle());
+    this.speeds = this.speedButtons(player);
+    this.range = this.slider(clock, player.scrub);
+    this.state = {};
+  }
+
+  speedButtons(player) {
+    const group = element("div", "speeds", this.element);
+    return SPEEDS.map((speed) => {
+      const button = element("button", "", group);
+      button.textContent = `${speed}×`;
+      button.addEventListener("click", () => player.changeSpeed(speed));
+      return button;
+    });
+  }
+
+  slider(clock, scrub) {
+    const range = element("input", "scrub", this.element);
+    Object.assign(range, { type: "range", min: clock.start, max: clock.end, step: "any" });
+    range.setAttribute("aria-label", "Timeline");
+    range.addEventListener("pointerdown", () => scrub.begin(Number(range.value)));
+    range.addEventListener("input", () => scrub.move(Number(range.value)));
+    range.addEventListener("change", () => scrub.end());
+    return range;
+  }
+
+  update(clock) {
+    const icon = clock.playing ? "pause" : clock.finished ? "replay" : "play";
+    if (this.state.icon !== icon) {
+      this.icon.setAttribute("d", ICONS[icon]);
+      this.button.setAttribute("aria-label", icon);
+    }
+    if (this.state.speed !== clock.speed) {
+      SPEEDS.forEach((speed, index) => this.speeds[index].classList.toggle("on", speed === clock.speed));
+    }
+    this.range.value = clock.t;
+    this.range.style.setProperty("--done", `${(clock.share() * 100).toFixed(2)}%`);
+    this.state = { icon, speed: clock.speed };
+  }
+}
+</script>
+<script>
+const SKY_ARRAYS = { u8: Uint8Array, u16: Uint16Array, u32: Uint32Array };
+const SKY_ALIGN = 8;
+const WEEK_HOURS = 168;
+
+function unpackSky(buffer) {
+  const length = new DataView(buffer).getUint32(0, true);
+  const header = JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, 4, length)));
+  const body = Math.ceil((4 + length) / SKY_ALIGN) * SKY_ALIGN;
+  const arrays = {};
+  for (const [name, [kind, offset, count]] of Object.entries(header.arrays)) {
+    arrays[name] = new SKY_ARRAYS[kind](buffer, body + offset, count);
+  }
+  return arrays;
+}
+
+async function loadSky(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`The data request returned status ${response.status}.`);
+  return unpackSky(await response.arrayBuffer());
+}
+</script>
+<script>
+const MAP_CELL = 32;
+const MAP_JITTER = 0.6;
+
+function scatter(node, salt) {
+  const mixed = Math.imul(node + 1, 2654435761) ^ Math.imul(salt + 7, 2246822519);
+  return ((mixed >>> 0) / 4294967296 - 0.5) * MAP_JITTER;
+}
+
+function largest(values) {
+  let top = 0;
+  for (let index = 0; index < values.length; index += 1) top = Math.max(top, values[index]);
+  return top;
+}
+
+class StarMap {
+  constructor(data) {
+    this.count = data.nx.length;
+    this.wx = Float32Array.from(data.nx, (x, node) => x + scatter(node, 1));
+    this.wy = Float32Array.from(data.ny, (y, node) => y + scatter(node, 2));
+    this.size = Math.max(largest(data.nx), largest(data.ny)) + 1;
+    this.columns = Math.ceil(this.size / MAP_CELL);
+    this.index();
+  }
+
+  cellOf(node) {
+    const column = Math.min(this.columns - 1, Math.floor(this.wx[node] / MAP_CELL));
+    const row = Math.min(this.columns - 1, Math.floor(this.wy[node] / MAP_CELL));
+    return row * this.columns + column;
+  }
+
+  index() {
+    const cells = this.columns * this.columns;
+    this.start = new Int32Array(cells + 1);
+    for (let node = 0; node < this.count; node += 1) this.start[this.cellOf(node) + 1] += 1;
+    for (let cell = 0; cell < cells; cell += 1) this.start[cell + 1] += this.start[cell];
+    const filled = this.start.slice(0, cells);
+    this.members = new Int32Array(this.count);
+    for (let node = 0; node < this.count; node += 1) this.members[filled[this.cellOf(node)]++] = node;
+  }
+
+  nearest(x, y, reach, held) {
+    const low = (value) => Math.max(0, Math.floor((value - reach) / MAP_CELL));
+    const high = (value) => Math.min(this.columns - 1, Math.floor((value + reach) / MAP_CELL));
+    let best = -1;
+    let closest = reach * reach;
+    for (let row = low(y); row <= high(y); row += 1) {
+      for (let column = low(x); column <= high(x); column += 1) {
+        const cell = row * this.columns + column;
+        for (let at = this.start[cell]; at < this.start[cell + 1]; at += 1) {
+          const node = this.members[at];
+          const distance = (this.wx[node] - x) ** 2 + (this.wy[node] - y) ** 2;
+          if (held[node] > 0 && distance < closest) [best, closest] = [node, distance];
+        }
+      }
+    }
+    return best;
+  }
+}
+</script>
+<script>
+const QUIET = { birth() {}, arrival() {}, copy() {} };
+
+class Ledger {
+  constructor(data, count) {
+    this.data = data;
+    this.held = new Uint32Array(count);
+    this.passed = new Uint32Array(count);
+    this.reset();
+  }
+
+  reset() {
+    this.held.fill(0);
+    this.passed.fill(0);
+    this.cursor = [0, 0, 0];
+    this.hour = -1;
+  }
+
+  forward(hour, sink) {
+    const data = this.data;
+    const stop = [upperBound(data.bh, hour), upperBound(data.ah, hour), upperBound(data.ch, hour)];
+    for (let row = this.cursor[0]; row < stop[0]; row += 1) {
+      const node = data.bn[row];
+      const before = this.held[node];
+      this.held[node] = before + data.bc[row];
+      sink.birth(row, node, before);
+    }
+    for (let row = this.cursor[1]; row < stop[1]; row += 1) {
+      const node = data.ad[row];
+      const before = this.held[node];
+      this.held[node] = before + data.ac[row];
+      sink.arrival(row, node, before);
+    }
+    for (let row = this.cursor[2]; row < stop[2]; row += 1) {
+      this.passed[data.cs[row]] += 1;
+      sink.copy(row);
+    }
+    this.cursor = stop;
+    this.hour = hour;
+  }
+
+  seek(hour) {
+    if (hour < this.hour) this.reset();
+    this.forward(hour, QUIET);
+  }
+}
+</script>
+<script>
+const VIEW_EASE = 0.12;
+const VIEW_FILL = 1.02;
+const VIEW_DEEPEST_PIXELS = 9;
+const VIEW_SHALLOWEST = 0.7;
+const VIEW_SETTLED = 1e-4;
+
+class SkyCamera {
+  constructor(size, key) {
+    this.size = size;
+    this.home = [1, size / 2, size / 2];
+    this.key = key;
+    const saved = readStore(key);
+    this.user = Boolean(saved && saved.user);
+    this.goal = this.user ? saved.goal : [...this.home];
+    this.now = [...this.goal];
+    this.savedAt = 0;
+  }
+
+  save(now) {
+    if (now - this.savedAt < SAVE_EVERY_MS) return;
+    writeStore(this.key, { goal: this.goal, user: this.user });
+    this.savedAt = now;
+  }
+
+  fit(width, height, room) {
+    this.width = width;
+    this.height = height;
+    const tall = height - room.top - room.bottom;
+    this.base = (Math.min(width, tall) * VIEW_FILL) / this.size;
+    this.middle = [width / 2, room.top + tall / 2];
+    this.deepest = VIEW_DEEPEST_PIXELS / this.base;
+  }
+
+  transform(frame = this.now) {
+    const scale = this.base * frame[0];
+    return [scale, this.middle[0] - frame[1] * scale, this.middle[1] - frame[2] * scale];
+  }
+
+  toWorld(sx, sy) {
+    const [scale, ox, oy] = this.transform();
+    return [(sx - ox) / scale, (sy - oy) / scale];
+  }
+
+  step(seconds) {
+    const share = 1 - Math.exp(-seconds / VIEW_EASE);
+    const [zoom, x, y] = this.now;
+    const next = [
+      Math.exp(Math.log(zoom) + (Math.log(this.goal[0]) - Math.log(zoom)) * share),
+      x + (this.goal[1] - x) * share,
+      y + (this.goal[2] - y) * share,
+    ];
+    const shift = Math.hypot(next[1] - this.goal[1], next[2] - this.goal[2]) * this.transform(next)[0];
+    const moving = Math.abs(Math.log(next[0] / this.goal[0])) > VIEW_SETTLED || shift > 0.05;
+    this.now = moving ? next : [...this.goal];
+    return moving;
+  }
+
+  zoomAt(sx, sy, factor) {
+    this.user = true;
+    const [wx, wy] = this.toWorld(sx, sy);
+    const zoom = Math.min(this.deepest, Math.max(VIEW_SHALLOWEST, this.goal[0] * factor));
+    const scale = this.base * zoom;
+    this.goal = [zoom, wx - (sx - this.middle[0]) / scale, wy - (sy - this.middle[1]) / scale];
+  }
+
+  panBy(dx, dy) {
+    this.user = true;
+    const scale = this.base * this.now[0];
+    this.goal = [this.goal[0], this.goal[1] - dx / scale, this.goal[2] - dy / scale];
+    this.now = [this.now[0], this.now[1] - dx / scale, this.now[2] - dy / scale];
+  }
+
+  hold(view) {
+    this.user = true;
+    this.goal = [...view];
+    this.now = [...view];
+  }
+
+  reset() {
+    this.user = false;
+    this.goal = [...this.home];
+  }
+}
+</script>
+<script>
+const KERNEL_FLOOR = 0.004;
+
+function radialKernel(radius, profile) {
+  const reach = Math.ceil(radius);
+  const [dx, dy, weight] = [[], [], []];
+  for (let y = -reach; y <= reach; y += 1) {
+    for (let x = -reach; x <= reach; x += 1) {
+      const value = profile(Math.hypot(x, y) / radius, x, y);
+      if (value < KERNEL_FLOOR) continue;
+      dx.push(x);
+      dy.push(y);
+      weight.push(value);
+    }
+  }
+  return { dx: Int16Array.from(dx), dy: Int16Array.from(dy), weight: Float32Array.from(weight) };
+}
+
+function addKernel(target, kernel, cx, cy, rgb, amount) {
+  const { buffer, width, height } = target;
+  const [px, py] = [Math.round(cx), Math.round(cy)];
+  const { dx, dy, weight } = kernel;
+  for (let index = 0; index < weight.length; index += 1) {
+    const x = px + dx[index];
+    const y = py + dy[index];
+    if (x < 0 || y < 0 || x >= width || y >= height) continue;
+    const at = (y * width + x) * 3;
+    const value = weight[index] * amount;
+    buffer[at] += rgb[0] * value;
+    buffer[at + 1] += rgb[1] * value;
+    buffer[at + 2] += rgb[2] * value;
+  }
+}
+
+function addPixel(target, x, y, rgb, value) {
+  if (x < 0 || y < 0 || x >= target.width || y >= target.height) return;
+  const at = (y * target.width + x) * 3;
+  target.buffer[at] += rgb[0] * value;
+  target.buffer[at + 1] += rgb[1] * value;
+  target.buffer[at + 2] += rgb[2] * value;
+}
+
+function addPoint(target, cx, cy, rgb, amount) {
+  const x = Math.floor(cx - 0.5);
+  const y = Math.floor(cy - 0.5);
+  const fx = cx - 0.5 - x;
+  const fy = cy - 0.5 - y;
+  addPixel(target, x, y, rgb, amount * (1 - fx) * (1 - fy));
+  addPixel(target, x + 1, y, rgb, amount * fx * (1 - fy));
+  addPixel(target, x, y + 1, rgb, amount * (1 - fx) * fy);
+  addPixel(target, x + 1, y + 1, rgb, amount * fx * fy);
+}
+</script>
+<script>
+function clipLine(target, line) {
+  const [x0, y0, x1, y1, a0, a1] = line;
+  const [dx, dy] = [x1 - x0, y1 - y0];
+  let [low, high] = [0, 1];
+  const edges = [[-dx, x0 + 1], [dx, target.width - x0], [-dy, y0 + 1], [dy, target.height - y0]];
+  for (const [p, q] of edges) {
+    if (p === 0) {
+      if (q < 0) return false;
+      continue;
+    }
+    if (p < 0) low = Math.max(low, q / p);
+    else high = Math.min(high, q / p);
+  }
+  if (low > high) return false;
+  line[0] = x0 + dx * low;
+  line[1] = y0 + dy * low;
+  line[2] = x0 + dx * high;
+  line[3] = y0 + dy * high;
+  line[4] = a0 + (a1 - a0) * low;
+  line[5] = a0 + (a1 - a0) * high;
+  return true;
+}
+
+function plotPair(target, steep, x, y, rgb, level) {
+  const floor = Math.floor(y);
+  const share = y - floor;
+  if (steep) {
+    addPixel(target, floor, x, rgb, level * (1 - share));
+    addPixel(target, floor + 1, x, rgb, level * share);
+  } else {
+    addPixel(target, x, floor, rgb, level * (1 - share));
+    addPixel(target, x, floor + 1, rgb, level * share);
+  }
+}
+
+function drawLine(target, line, rgb) {
+  if (!clipLine(target, line)) return;
+  let [x0, y0, x1, y1, a0, a1] = line;
+  const steep = Math.abs(y1 - y0) > Math.abs(x1 - x0);
+  if (steep) [x0, y0, x1, y1] = [y0, x0, y1, x1];
+  if (x0 > x1) [x0, y0, x1, y1, a0, a1] = [x1, y1, x0, y0, a1, a0];
+  const span = Math.max(x1 - x0, 1e-6);
+  const gradient = (y1 - y0) / span;
+  const first = Math.round(x0);
+  let y = y0 + gradient * (first - x0);
+  for (let x = first; x <= Math.round(x1); x += 1) {
+    plotPair(target, steep, x, y, rgb, a0 + (a1 - a0) * clampUnit((x - x0) / span));
+    y += gradient;
+  }
+}
+</script>
+<script>
+const TONE_CORE = 0;
+const TONE_FAINT = 1;
+const TONE_NEUTRAL = 2;
+const TONE_CLUMPS = 3;
+const NEUTRAL_DIM = 0.3;
+const CLUMP_CHROMA = 1.7;
+const LABEL_WHITENING = 0.55;
+
+function vividRgb(hex) {
+  const rgb = unitRgb(hex);
+  const mean = (rgb[0] + rgb[1] + rgb[2]) / 3;
+  const spread = rgb.map((value) => Math.max(0, mean + (value - mean) * CLUMP_CHROMA));
+  const top = Math.max(...spread);
+  return spread.map((value) => value / top);
+}
+
+function starColours(palette) {
+  const faint = unitRgb(mixHex(palette.star, palette.muted, 0.5));
+  const clumps = palette.tints.map(vividRgb);
+  return [unitRgb(palette.star), faint, faint.map((value) => value * NEUTRAL_DIM), ...clumps];
+}
+
+function labelColour(hex, palette) {
+  const star = unitRgb(palette.star);
+  const mixed = vividRgb(hex).map((value, index) => value + (star[index] - value) * LABEL_WHITENING);
+  return `rgb(${mixed.map((value) => Math.round(255 * value)).join(",")})`;
+}
+
+function starTones(data, clumps) {
+  const tones = new Uint8Array(data.nx.length);
+  for (let node = 0; node < tones.length; node += 1) {
+    const clump = data.nclump[node];
+    if (!clumps.coloured) tones[node] = data.nfield[node] === 1 ? TONE_FAINT : TONE_CORE;
+    else tones[node] = clump > 0 ? TONE_CLUMPS + clumps.items[clump - 1].colour : TONE_NEUTRAL;
+  }
+  return tones;
+}
+</script>
+<script>
+const STAR_BASE = 0.6;
+const STAR_GAIN = 0.24;
+const STAR_CAP = 2.6;
+const GLOW_FROM = 24;
+const GLOW_GAIN = 0.2;
+const FIELD_DIM = 0.32;
+const STAR_MARGIN = 32;
+const CORE_PROFILE = (distance) => Math.exp(-4.6 * distance * distance);
+const GLOW_PROFILE = (distance) => (distance >= 1 ? 0 : (1 - distance) ** 2 / (1 + 14 * distance * distance));
+
+function unitRgb(hex) {
+  return hexToRgb(hex).map((value) => value / 255);
+}
+
+function coreLight(held) {
+  return held > 0 ? Math.min(STAR_CAP, STAR_BASE + STAR_GAIN * Math.log2(held)) : 0;
+}
+
+function glowLight(held) {
+  return held >= GLOW_FROM ? GLOW_GAIN * Math.log2((2 * held) / GLOW_FROM) : 0;
+}
+
+class StarLayer {
+  constructor(map, data, levels, scene, ratio) {
+    Object.assign(this, { map, ratio, coreOf: levels.core, glowOf: levels.glow });
+    this.data = data;
+    this.field = data.nfield;
+    this.type = data.ntype;
+    this.tone = starTones(data, scene.clumps);
+    this.coloured = scene.clumps.coloured;
+    this.colours = starColours(scene.palette);
+    this.tints = tintColors(scene.palette, scene.types.length).map(unitRgb);
+  }
+
+  recolour(clumps) {
+    this.tone = starTones(this.data, clumps);
+    this.coloured = clumps.coloured;
+  }
+
+  resize(width, height, background) {
+    this.width = width;
+    this.height = height;
+    this.buffer = new Float32Array(width * height * 3);
+    this.background = background;
+    this.scale = 0;
+  }
+
+  look(scale) {
+    if (scale === this.scale) return;
+    const css = scale / this.ratio;
+    const radius = 0.8 * Math.sqrt(css) * this.ratio;
+    this.coreKernel = radius > 1 ? radialKernel(radius * 1.6, CORE_PROFILE) : null;
+    this.glowKernel = radialKernel((4 + 3 * Math.log2(1 + css / 0.2)) * this.ratio, GLOW_PROFILE);
+    this.level = Math.min(1, 0.3 + 0.3 * css) * Math.sqrt(this.ratio);
+    this.scale = scale;
+  }
+
+  measure(held) {
+    for (let node = 0; node < held.length; node += 1) {
+      this.coreOf[node] = coreLight(held[node]) * (this.field[node] === 1 ? FIELD_DIM : 1);
+      this.glowOf[node] = glowLight(held[node]);
+    }
+  }
+
+  paint(transform, held, fresh) {
+    this.look(transform[0]);
+    this.transform = transform;
+    if (fresh) this.measure(held);
+    this.buffer.set(this.background);
+    if (this.coreKernel) this.paintKernels();
+    else paintPoints(this, transform, this.coreOf, this.level);
+    for (let node = 0; node < this.glowOf.length; node += 1) {
+      if (this.glowOf[node] > 0) this.splat(node, 0, this.glowOf[node]);
+    }
+  }
+
+  paintKernels() {
+    for (let node = 0; node < this.coreOf.length; node += 1) {
+      if (this.coreOf[node] > 0) this.splat(node, this.coreOf[node], 0);
+    }
+  }
+
+  adjust(node, before, after) {
+    const dim = this.field[node] === 1 ? FIELD_DIM : 1;
+    const core = coreLight(after) * dim;
+    const glow = glowLight(after);
+    this.splat(node, core - this.coreOf[node], glow - this.glowOf[node]);
+    this.coreOf[node] = core;
+    this.glowOf[node] = glow;
+  }
+
+  splat(node, core, glow) {
+    const [scale, ox, oy] = this.transform;
+    const x = this.map.wx[node] * scale + ox;
+    const y = this.map.wy[node] * scale + oy;
+    if (x < -STAR_MARGIN || y < -STAR_MARGIN || x > this.width + STAR_MARGIN || y > this.height + STAR_MARGIN) return;
+    const tone = this.colours[this.tone[node]];
+    if (core !== 0 && this.coreKernel) addKernel(this, this.coreKernel, x, y, tone, core * this.level);
+    else if (core !== 0) addPoint(this, x, y, tone, core * this.level);
+    const halo = this.coloured ? tone : this.tints[this.type[node]];
+    if (glow !== 0) addKernel(this, this.glowKernel, x, y, halo, glow * this.level);
+  }
+}
+
+function paintPoints(layer, transform, levels, level) {
+  const { buffer, width, height, map, tone, colours } = layer;
+  const [scale, ox, oy] = transform;
+  for (let node = 0; node < levels.length; node += 1) {
+    const amount = levels[node] * level;
+    if (amount === 0) continue;
+    const x = map.wx[node] * scale + ox - 0.5;
+    const y = map.wy[node] * scale + oy - 0.5;
+    if (x < 0 || y < 0 || x >= width - 1 || y >= height - 1) continue;
+    const left = x | 0;
+    const top = y | 0;
+    const fx = x - left;
+    const fy = y - top;
+    const rgb = colours[tone[node]];
+    const at = (top * width + left) * 3;
+    const below = at + width * 3;
+    const upper = (1 - fy) * amount;
+    const lower = fy * amount;
+    for (let channel = 0; channel < 3; channel += 1) {
+      const value = rgb[channel];
+      buffer[at + channel] += value * (1 - fx) * upper;
+      buffer[at + 3 + channel] += value * fx * upper;
+      buffer[below + channel] += value * (1 - fx) * lower;
+      buffer[below + 3 + channel] += value * fx * lower;
+    }
+  }
+}
+</script>
+<script>
+const LABEL_FULL_ZOOM = 12;
+const LABEL_GONE_ZOOM = 32;
+const LABEL_GROWTH = 0.22;
+const LABEL_GROWTH_MAX = 1.6;
+const LABEL_GAP = 7;
+const LABEL_SIDE_ROOM = 14;
+const LABEL_TOP_ROOM = 76;
+const LABEL_BOTTOM_ROOM = 104;
+const LABEL_LIT_SHARE = 0.2;
+const LABEL_COUNT_MS = 300;
+const LABEL_SAFE_SHARE = 0.05;
+const LABEL_FADE_SECONDS = 0.5;
+
+function labelSize(size) {
+  return Math.round(12.5 + 2.6 * Math.log10(Math.max(1, size / 100)));
+}
+
+function clampInto(value, low, high) {
+  return Math.min(Math.max(value, low), Math.max(low, high));
+}
+
+function labelBox(centre, size, view, side) {
+  const x = clampInto(centre[0] - size[0] / 2, side, view[0] - size[0] - side);
+  const y = clampInto(centre[1] - size[1] / 2, LABEL_TOP_ROOM, view[1] - size[1] - LABEL_BOTTOM_ROOM);
+  return [x, y, x + size[0], y + size[1]];
+}
+
+function inView(centre, view) {
+  return centre[0] >= 0 && centre[0] <= view[0] && centre[1] >= LABEL_TOP_ROOM && centre[1] <= view[1] - LABEL_BOTTOM_ROOM;
+}
+
+function overlaps(box, other) {
+  return box[0] < other[2] && other[0] < box[2] && box[1] < other[3] && other[1] < box[3];
+}
+
+function layerBox(element, layer) {
+  const [box, origin] = [element.getBoundingClientRect(), layer.getBoundingClientRect()];
+  return [box.left - origin.left, box.top - origin.top, box.right - origin.left, box.bottom - origin.top];
+}
+
+function focusOption() {
+  const focus = recordOption("focus");
+  return focus ? focus.split(",").map((clump) => Number(clump) - 1) : [];
+}
+
+class ClumpLabels {
+  constructor(host, clumps, palette, scale, avoided) {
+    this.items = clumps.items;
+    this.avoided = avoided;
+    this.safe = isRecording() ? LABEL_SAFE_SHARE : 0;
+    this.focus = focusOption();
+    this.fadeStep = isRecording() ? RECORD_STEP / LABEL_FADE_SECONDS : 1;
+    this.layer = element("div", "clumps", host);
+    this.labels = this.items.map((item) => {
+      const label = element("div", "clump", this.layer);
+      label.textContent = item.label;
+      label.style.fontSize = `${labelSize(item.size) * scale}px`;
+      return label;
+    });
+    this.recolour(clumps.coloured, palette);
+    this.lit = new Float32Array(this.items.length);
+    this.goal = new Float32Array(this.items.length);
+    this.alpha = new Float32Array(this.items.length);
+    this.countedAt = -Infinity;
+  }
+
+  recolour(coloured, palette) {
+    this.labels.forEach((label, index) => {
+      label.style.color = coloured ? labelColour(palette.tints[this.items[index].colour], palette) : "";
+    });
+  }
+
+  update(sky, now) {
+    if (now - this.countedAt > LABEL_COUNT_MS) this.count(sky.data.nclump, sky.ledger.held, now);
+    const zoom = sky.camera.now[0];
+    const fade = Math.min(1, Math.max(0, Math.log(LABEL_GONE_ZOOM / zoom) / Math.log(LABEL_GONE_ZOOM / LABEL_FULL_ZOOM)));
+    const grow = Math.min(LABEL_GROWTH_MAX, 1 + LABEL_GROWTH * Math.log2(Math.max(1, zoom)));
+    const key = `${sky.transform.join()}|${fade}|${grow}|${this.version}`;
+    if (key !== this.placed) {
+      this.placed = key;
+      this.layer.style.opacity = fade;
+      if (fade > 0) this.place(sky.transform, grow);
+    }
+    this.fade();
+  }
+
+  fade() {
+    this.labels.forEach((label, index) => {
+      const change = Math.max(-this.fadeStep, Math.min(this.fadeStep, this.goal[index] - this.alpha[index]));
+      if (change === 0) return;
+      this.alpha[index] += change;
+      label.style.opacity = this.alpha[index];
+    });
+  }
+
+  order() {
+    const rank = (index) => (this.focus.includes(index) ? 0 : this.alpha[index] > 0 || this.goal[index] > 0 ? 1 : 2);
+    return this.items.map((_, index) => index).sort((a, b) => rank(a) - rank(b) || a - b);
+  }
+
+  shows(index) {
+    return this.goal[index] > 0;
+  }
+
+  count(clumpOf, held, now) {
+    const lit = new Uint32Array(this.items.length);
+    for (let node = 0; node < clumpOf.length; node += 1) {
+      if (clumpOf[node] > 0 && held[node] > 0) lit[clumpOf[node] - 1] += 1;
+    }
+    this.lit = Float32Array.from(lit, (count, index) => Math.min(1, count / (LABEL_LIT_SHARE * this.items[index].size)));
+    this.version = this.lit.join();
+    this.countedAt = now;
+  }
+
+  place(transform, grow) {
+    if (!this.boxes) this.boxes = this.labels.map((label) => [label.offsetWidth, label.offsetHeight]);
+    const [scale, ox, oy] = transform;
+    const view = [this.layer.clientWidth, this.layer.clientHeight];
+    const side = Math.max(LABEL_SIDE_ROOM, this.safe * view[0]);
+    const taken = this.avoided.map((element) => layerBox(element, this.layer));
+    for (const index of this.order()) {
+      const label = this.labels[index];
+      const centre = [this.items[index].x * scale + ox, this.items[index].y * scale + oy];
+      const [x, y, right, bottom] = labelBox(centre, [this.boxes[index][0] * grow, this.boxes[index][1] * grow], view, side);
+      const box = [x - LABEL_GAP, y - LABEL_GAP, right + LABEL_GAP, bottom + LABEL_GAP];
+      const shown = this.items[index].label !== "" && this.lit[index] > 0 && inView(centre, view) && !taken.some((other) => overlaps(box, other));
+      if (shown || this.alpha[index] > 0) taken.push(box);
+      label.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) scale(${grow.toFixed(3)})`;
+      this.goal[index] = shown ? this.lit[index] : 0;
+    }
+  }
+
+  show(on) {
+    this.layer.classList.toggle("off", !on);
+  }
+
+  describe(clump) {
+    return clump > 0 && this.items[clump - 1].label ? ` · ${this.items[clump - 1].label}` : "";
+  }
+}
+</script>
+<script>
+const LIGHT_DECAY = 1 / 0.22;
+const LIGHT_RENEW = 8;
+const LIGHT_WINDOW_HOURS = Math.round((5 / LIGHT_DECAY) * WEEK_HOURS);
+
+function copyRow(buffer, spare, row, out, columns) {
+  for (let x = 0, at = out; x < columns.length; x += 1, at += 3) {
+    const column = columns[x];
+    if (column < 0) {
+      spare[at] = spare[at + 1] = spare[at + 2] = 0;
+      continue;
+    }
+    spare[at] = buffer[row + column];
+    spare[at + 1] = buffer[row + column + 1];
+    spare[at + 2] = buffer[row + column + 2];
+  }
+}
+
+class LightLayer {
+  resize(width, height) {
+    this.width = width;
+    this.height = height;
+    this.buffer = new Float32Array(width * height * 3);
+    this.spare = new Float32Array(width * height * 3);
+    this.columns = new Int32Array(width);
+    this.ref = 0;
+  }
+
+  clear(t) {
+    this.buffer.fill(0);
+    this.ref = t;
+  }
+
+  weight(t) {
+    return Math.exp(LIGHT_DECAY * (t - this.ref));
+  }
+
+  gain(t) {
+    return Math.exp(-LIGHT_DECAY * (t - this.ref));
+  }
+
+  renew(t) {
+    if (LIGHT_DECAY * (t - this.ref) < LIGHT_RENEW) return;
+    const gain = this.gain(t);
+    const buffer = this.buffer;
+    for (let index = 0; index < buffer.length; index += 1) buffer[index] *= gain;
+    this.ref = t;
+  }
+
+  grow(source) {
+    const { width, height, buffer } = this;
+    const [across, down] = [source.width / width, source.height / height];
+    for (let y = 0; y < height; y += 1) {
+      const row = Math.min(source.height - 1, Math.floor(y * down)) * source.width;
+      for (let x = 0; x < width; x += 1) {
+        const from = (row + Math.min(source.width - 1, Math.floor(x * across))) * 3;
+        const at = (y * width + x) * 3;
+        buffer[at] = source.buffer[from];
+        buffer[at + 1] = source.buffer[from + 1];
+        buffer[at + 2] = source.buffer[from + 2];
+      }
+    }
+    this.ref = source.ref;
+  }
+
+  shrink(source) {
+    const { width, height, buffer } = this;
+    const wide = source.width * 3;
+    for (let y = 0; y < height; y += 1) {
+      const top = Math.min(2 * y, source.height - 2) * wide;
+      for (let x = 0, at = y * width * 3; x < width; x += 1, at += 3) {
+        const left = top + Math.min(2 * x, source.width - 2) * 3;
+        for (let channel = 0; channel < 3; channel += 1) {
+          const corner = left + channel;
+          const sum = source.buffer[corner] + source.buffer[corner + 3] + source.buffer[corner + wide] + source.buffer[corner + wide + 3];
+          buffer[at + channel] = sum / 4;
+        }
+      }
+    }
+    this.ref = source.ref;
+  }
+
+  warp(from, to) {
+    const share = from[0] / to[0];
+    const { width, height, buffer, spare, columns } = this;
+    for (let x = 0; x < width; x += 1) {
+      const column = Math.floor((x + 0.5) * share + from[1] - to[1] * share);
+      columns[x] = column >= 0 && column < width ? column * 3 : -1;
+    }
+    for (let y = 0; y < height; y += 1) {
+      const source = Math.floor((y + 0.5) * share + from[2] - to[2] * share);
+      const out = y * width * 3;
+      if (source < 0 || source >= height) {
+        spare.fill(0, out, out + width * 3);
+        continue;
+      }
+      copyRow(buffer, spare, source * width * 3, out, columns);
+    }
+    [this.buffer, this.spare] = [spare, buffer];
+  }
+}
+</script>
+<script>
+const BIRTH_LIGHT = 0.4;
+const FIELD_BIRTH = 0.45;
+const ORIGIN_LIGHT = 0.1;
+const RISK_LIGHT = 0.42;
+const RISK_DIM = isRecording() ? 0.25 : 0.4;
+const COPY_LIGHT = 0.9;
+const COPY_SIDES = [[0, 1], [1, 0.3], [-1, 0.3]];
+const RISK_SIDES = isRecording() ? [[0, 1], [1, 0.6], [-1, 0.6]] : [[0, 1]];
+const LINE_START = 0.25;
+const HALO_FROM = 150;
+const HALO_LIGHT = 0.5;
+const SPARKLE_PROFILE = (distance, x, y) => {
+  const arm = x === 0 || y === 0 ? (1 - distance) ** 2 : 0;
+  return Math.max(arm, Math.exp(-14 * distance * distance));
+};
+
+function boosted(count) {
+  return 1 + 0.3 * Math.log2(count);
+}
+
+function drawBand(light, ends, amount, sides, tone) {
+  const [x0, y0, x1, y1] = ends;
+  const length = Math.max(Math.hypot(x1 - x0, y1 - y0), 1e-6);
+  const [nx, ny] = [(y0 - y1) / length, (x1 - x0) / length];
+  for (const [side, share] of sides) {
+    const line = [x0 + nx * side, y0 + ny * side, x1 + nx * side, y1 + ny * side, amount * share * LINE_START, amount * share];
+    drawLine(light, line, tone);
+  }
+}
+
+class EventPainter {
+  constructor(data, map, ledger, palette) {
+    Object.assign(this, { data, map, ledger });
+    this.tones = {
+      star: unitRgb(palette.star), glow: unitRgb(palette.glow),
+      trail: unitRgb(palette.trail), risk: isRecording() ? vividRgb(palette.risk) : unitRgb(palette.risk),
+    };
+    this.halos = new Map();
+    this.risk = false;
+    this.extra = null;
+    this.draws = [(row, light) => this.drawBirth(row, light), (row, light) => this.drawArrival(row, light), (row, light) => this.drawCopy(row, light)];
+  }
+
+  use(stars, light, ratio) {
+    Object.assign(this, { stars, light, ratio });
+  }
+
+  setView(transform) {
+    this.transform = transform;
+    this.reach = Math.min(2.2, Math.max(1, Math.sqrt(transform[0] / this.ratio / 0.25))) * this.ratio;
+    this.sparkle = radialKernel(3.5 * this.reach, SPARKLE_PROFILE);
+    this.halos.clear();
+  }
+
+  at(node) {
+    const [scale, ox, oy] = this.transform;
+    return [this.map.wx[node] * scale + ox, this.map.wy[node] * scale + oy];
+  }
+
+  live(kind, row) {
+    this.draws[kind](row, this.light);
+    if (this.extra) this.draws[kind](row, this.extra);
+  }
+
+  birth(row, node, before) {
+    this.stars.adjust(node, before, this.ledger.held[node]);
+    this.live(0, row);
+  }
+
+  arrival(row, node, before) {
+    this.stars.adjust(node, before, this.ledger.held[node]);
+    this.live(1, row);
+  }
+
+  copy(row) {
+    this.live(2, row);
+  }
+
+  drawBirth(row, light) {
+    const data = this.data;
+    const weight = light.weight(data.bh[row] / WEEK_HOURS);
+    const count = data.bc[row];
+    const node = data.bn[row];
+    const [x, y] = this.at(node);
+    const amount = weight * BIRTH_LIGHT * boosted(count) * (data.nfield[node] ? FIELD_BIRTH : 1);
+    addKernel(light, this.sparkle, x, y, this.tones.star, amount);
+    if (count >= HALO_FROM) this.halo(light, x, y, count, weight);
+  }
+
+  drawArrival(row, light) {
+    const data = this.data;
+    const weight = light.weight(data.ah[row] / WEEK_HOURS);
+    const risky = this.risk && data.ar[row] > 0;
+    const level = risky ? RISK_LIGHT * boosted(data.ar[row]) : ORIGIN_LIGHT * boosted(data.ac[row]);
+    const amount = weight * level * (this.risk && !risky ? RISK_DIM : 1);
+    const [x0, y0] = this.at(data.ao[row]);
+    const [x1, y1] = this.at(data.ad[row]);
+    if (risky) drawBand(light, [x0, y0, x1, y1], amount, RISK_SIDES, this.tones.risk);
+    else drawLine(light, [x0, y0, x1, y1, amount * LINE_START, amount], this.tones.trail);
+  }
+
+  drawCopy(row, light) {
+    const data = this.data;
+    const weight = light.weight(data.ch[row] / WEEK_HOURS);
+    const [x0, y0] = this.at(data.cs[row]);
+    const [x1, y1] = this.at(data.cc[row]);
+    drawBand(light, [x0, y0, x1, y1], weight * COPY_LIGHT, COPY_SIDES, this.tones.glow);
+    if (data.cl[row] >= HALO_FROM) this.halo(light, x1, y1, data.cl[row], weight);
+  }
+
+  halo(light, x, y, count, weight) {
+    const radius = Math.round((10 + 6 * Math.log2(count / HALO_FROM)) * this.reach);
+    if (!this.halos.has(radius)) this.halos.set(radius, radialKernel(radius, GLOW_PROFILE));
+    addKernel(light, this.halos.get(radius), x, y, this.tones.glow, weight * HALO_LIGHT);
+  }
+
+  window(hour) {
+    const from = hour - LIGHT_WINDOW_HOURS;
+    return [this.data.bh, this.data.ah, this.data.ch].map((hours) => [lowerBound(hours, from), upperBound(hours, hour)]);
+  }
+
+  replay(hour, light) {
+    this.window(hour).forEach(([from, stop], kind) => {
+      for (let row = from; row < stop; row += 1) this.draws[kind](row, light);
+    });
+  }
+}
+</script>
+<script>
+const TONE_STEPS = 4096;
+const TONE_SCALE = 512;
+const TONE_LAST = TONE_STEPS - 1;
+const OPAQUE = 255 << 24;
+const SKY_GLOW_CENTRE = 0.46;
+const SKY_GLOW_REACH = 0.62;
+
+function toneTable() {
+  return Uint8Array.from({ length: TONE_STEPS }, (_, step) => Math.round(255 * (1 - Math.exp(-step / TONE_SCALE))));
+}
+
+function linearRgb(hex) {
+  return unitRgb(hex).map((value) => -Math.log(1 - Math.min(value, 0.999)));
+}
+
+function skyBackground(width, height, palette) {
+  const [inner, outer] = [linearRgb(palette.haze), linearRgb(palette.sky)];
+  const reach = Math.hypot(width, height) * SKY_GLOW_REACH;
+  const background = new Float32Array(width * height * 3);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const share = Math.min(1, Math.hypot(x - width / 2, y - height * SKY_GLOW_CENTRE) / reach);
+      const at = (y * width + x) * 3;
+      const offset = ditherOffset(y * width + x) / 255;
+      for (let channel = 0; channel < 3; channel += 1) {
+        const level = inner[channel] + (outer[channel] - inner[channel]) * share;
+        background[at + channel] = level + offset * Math.exp(level);
+      }
+    }
+  }
+  return background;
+}
+
+function compose(pixels, base, light, gain, table) {
+  for (let pixel = 0, at = 0; pixel < pixels.length; pixel += 1, at += 3) {
+    const red = ((base[at] + light[at] * gain) * TONE_SCALE) | 0;
+    const green = ((base[at + 1] + light[at + 1] * gain) * TONE_SCALE) | 0;
+    const blue = ((base[at + 2] + light[at + 2] * gain) * TONE_SCALE) | 0;
+    pixels[pixel] =
+      OPAQUE |
+      (table[blue < TONE_LAST ? blue : TONE_LAST] << 16) |
+      (table[green < TONE_LAST ? green : TONE_LAST] << 8) |
+      table[red < TONE_LAST ? red : TONE_LAST];
+  }
+}
+</script>
+<script>
+const MOTION_RATIO = 0.5;
+
+class Surface {
+  constructor(host, ratio, sky) {
+    this.ratio = ratio;
+    this.canvas = element("canvas", "surface", host);
+    this.context = this.canvas.getContext("2d", { alpha: false });
+    this.stars = new StarLayer(sky.map, sky.data, sky.levels, sky.scene, ratio);
+    this.light = new LightLayer();
+    this.next = new LightLayer();
+  }
+
+  resize(width, height, palette) {
+    const w = Math.max(1, Math.round(width * this.ratio));
+    const h = Math.max(1, Math.round(height * this.ratio));
+    [this.canvas.width, this.canvas.height] = [w, h];
+    this.image = this.context.createImageData(w, h);
+    this.pixels = new Uint32Array(this.image.data.buffer);
+    this.stars.resize(w, h, skyBackground(w, h, palette));
+    this.light.resize(w, h);
+    this.next.resize(w, h);
+  }
+
+  swap() {
+    [this.light, this.next] = [this.next, this.light];
+  }
+
+  frame(transform) {
+    return transform.map((value) => value * this.ratio);
+  }
+
+  present(gain, table) {
+    compose(this.pixels, this.stars.buffer, this.light.buffer, gain, table);
+    this.context.putImageData(this.image, 0, 0);
+  }
+
+  show(on) {
+    this.canvas.classList.toggle("on", on);
+  }
+}
+
+const SkyMotion = {
+  use(surface) {
+    this.active = surface;
+    for (const each of this.surfaces) each.show(each === surface);
+    this.painter.use(surface.stars, surface.light, surface.ratio);
+  },
+
+  turn(transform, now) {
+    if (isRecording()) return this.reframe(transform);
+    const [full, quick] = this.surfaces;
+    if (this.active === full) {
+      this.drop();
+      quick.light.shrink(full.light);
+      this.use(quick);
+    }
+    quick.light.warp(quick.frame(this.transform), quick.frame(transform));
+    this.transform = transform;
+    quick.stars.paint(quick.frame(transform), this.ledger.held, false);
+    this.painter.setView(quick.frame(transform));
+    this.turnedAt = now;
+    this.dirty = true;
+  },
+
+  settle() {
+    const [full, quick] = this.surfaces;
+    full.light.grow(quick.light);
+    this.use(full);
+    full.stars.paint(full.frame(this.transform), this.ledger.held, false);
+    this.painter.setView(full.frame(this.transform));
+    this.relightLater();
+    this.dirty = true;
+  },
+};
+</script>
+<script>
+const RELIGHT_BUDGET_MS = 6;
+const RELIGHT_CHECK = 32;
+
+class Relight {
+  constructor(painter, light, hour, t) {
+    this.painter = painter;
+    this.light = light;
+    light.clear(t);
+    this.ranges = painter.window(hour);
+    this.kind = 0;
+  }
+
+  run(budget) {
+    const end = performance.now() + budget;
+    while (this.kind < this.ranges.length) {
+      const range = this.ranges[this.kind];
+      while (range[0] < range[1]) {
+        this.painter.draws[this.kind](range[0], this.light);
+        range[0] += 1;
+        if (range[0] % RELIGHT_CHECK === 0 && performance.now() > end) return false;
+      }
+      this.kind += 1;
+    }
+    return true;
+  }
+}
+
+const SkyRelight = {
+  relight() {
+    this.drop();
+    this.active.light.clear(this.clock.t);
+    this.painter.replay(this.ledger.hour, this.active.light);
+    this.dirty = true;
+  },
+
+  relightLater() {
+    if (isRecording()) return this.relight();
+    this.job = new Relight(this.painter, this.active.next, this.ledger.hour, this.clock.t);
+    this.painter.extra = this.active.next;
+  },
+
+  drop() {
+    this.job = null;
+    this.painter.extra = null;
+  },
+
+  work() {
+    if (!this.job || !this.job.run(RELIGHT_BUDGET_MS)) return;
+    this.active.swap();
+    this.use(this.active);
+    this.drop();
+    this.dirty = true;
+  },
+};
+</script>
+<script>
+const SKY_DAY_MS = 86400000;
+const CAPTION_MS = 7000;
+const SKY_DATE = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+const SKY_COUNT = new Intl.NumberFormat("en-US");
+
+function counted(count, one, many) {
+  return `${SKY_COUNT.format(count)} ${count === 1 ? one : many}`;
+}
+
+function weekCounts(weeks, t) {
+  const week = Math.max(0, Math.min(weeks.births.length - 1, Math.floor(t)));
+  const parts = [
+    [weeks.births[week], "new skill", "new skills"],
+    [weeks.arrivals[week], "adoption", "adoptions"],
+    [weeks.copies[week], "identified copy", "identified copies"],
+  ];
+  return `${parts.map((part) => counted(...part)).join(" · ")} this week`;
+}
+
+class SkyHud {
+  constructor(host, scene) {
+    this.element = element("div", "hud", host);
+    this.stamp = element("div", "stamp", this.element);
+    this.counts = element("div", "note", this.element);
+    this.caption = element("div", "caption", host);
+    this.caption.textContent = scene.caption;
+    window.setTimeout(() => this.caption.classList.add("faded"), CAPTION_MS);
+    this.origin = Date.parse(scene.origin);
+    this.last = this.origin + (scene.weeks.births.length * 7 - 1) * SKY_DAY_MS;
+    this.weeks = scene.weeks;
+  }
+
+  update(t) {
+    const moment = Math.min(this.last, this.origin + Math.max(0, t) * 7 * SKY_DAY_MS);
+    const stamp = SKY_DATE.format(new Date(moment));
+    const counts = weekCounts(this.weeks, t);
+    if (this.stamp.textContent !== stamp) this.stamp.textContent = stamp;
+    if (this.counts.textContent !== counts) this.counts.textContent = counts;
+  }
+}
+
+function legendToggle(host, text, kind, handler) {
+  const button = element("button", `toggle ${kind}`, host);
+  button.textContent = text;
+  button.setAttribute("aria-pressed", String(handler.on));
+  button.addEventListener("click", () => {
+    const on = button.getAttribute("aria-pressed") !== "true";
+    button.setAttribute("aria-pressed", String(on));
+    handler.set(on);
+  });
+  return button;
+}
+
+class SkyLegend {
+  constructor(host, legend, handlers) {
+    this.element = element("div", "legend", host);
+    for (const item of legend.items) {
+      const entry = element("span", `item ${item.kind}`, this.element);
+      element("i", `swatch ${item.kind}`, entry);
+      element("span", "", entry).textContent = item.label;
+    }
+    const toggles = element("span", "toggles", this.element);
+    if (handlers.names) this.names = legendToggle(toggles, legend.names, "names", handlers.names);
+    this.toggle = legendToggle(toggles, legend.risk, "risk", handlers.risk);
+  }
+}
+</script>
+<script>
+const SKY_WHEEL_RATE = 0.0016;
+const SKY_PINCH_RATE = 0.012;
+const SKY_LINE_PIXELS = 16;
+const SKY_DRAG_FROM = 3;
+const SKY_TIP_OFFSET = 14;
+const SKY_HOVER_PIXELS = 9;
+
+class SkyPointer {
+  constructor(sky) {
+    this.sky = sky;
+    const stage = sky.stage;
+    this.tip = element("div", "tip", sky.root);
+    this.reset = element("button", "reset", sky.root);
+    this.reset.textContent = "Reset view";
+    this.reset.addEventListener("click", () => this.home());
+    stage.addEventListener("wheel", (event) => this.wheel(event), { passive: false });
+    stage.addEventListener("pointerdown", (event) => this.grab(event));
+    stage.addEventListener("pointermove", (event) => this.move(event));
+    stage.addEventListener("pointerup", (event) => this.drop(event));
+    stage.addEventListener("pointerleave", () => this.tip.classList.remove("on"));
+    stage.addEventListener("dblclick", () => this.home());
+  }
+
+  wheel(event) {
+    event.preventDefault();
+    const delta = event.deltaY * (event.deltaMode ? SKY_LINE_PIXELS : 1);
+    const factor = Math.exp(-delta * (event.ctrlKey ? SKY_PINCH_RATE : SKY_WHEEL_RATE));
+    this.sky.camera.zoomAt(event.offsetX, event.offsetY, factor);
+    this.update();
+  }
+
+  grab(event) {
+    if (event.button !== 0) return;
+    this.drag = { x: event.clientX, y: event.clientY, moved: false };
+    this.sky.stage.setPointerCapture(event.pointerId);
+  }
+
+  move(event) {
+    if (!this.drag) return this.hover(event);
+    const [dx, dy] = [event.clientX - this.drag.x, event.clientY - this.drag.y];
+    if (!this.drag.moved && Math.hypot(dx, dy) < SKY_DRAG_FROM) return;
+    this.drag = { x: event.clientX, y: event.clientY, moved: true };
+    this.sky.root.classList.add("dragging");
+    this.tip.classList.remove("on");
+    this.sky.camera.panBy(dx, dy);
+    this.update();
+  }
+
+  drop(event) {
+    this.drag = null;
+    this.sky.root.classList.remove("dragging");
+    if (this.sky.stage.hasPointerCapture(event.pointerId)) this.sky.stage.releasePointerCapture(event.pointerId);
+  }
+
+  home() {
+    this.sky.camera.reset();
+    this.update();
+  }
+
+  update() {
+    this.reset.classList.toggle("on", this.sky.camera.user);
+  }
+
+  hover(event) {
+    const { camera, map, ledger } = this.sky;
+    const [x, y] = camera.toWorld(event.offsetX, event.offsetY);
+    const node = map.nearest(x, y, SKY_HOVER_PIXELS / camera.transform()[0], ledger.held);
+    if (node < 0) return this.tip.classList.remove("on");
+    this.tip.textContent = this.sky.describe(node);
+    const box = this.sky.root.getBoundingClientRect();
+    const left = Math.min(event.clientX - box.left + SKY_TIP_OFFSET, box.width - this.tip.offsetWidth - 8);
+    this.tip.style.left = `${left}px`;
+    this.tip.style.top = `${event.clientY - box.top + SKY_TIP_OFFSET}px`;
+    this.tip.classList.add("on");
+  }
+}
+</script>
+<script>
+const SKY_SETTLE_MS = 220;
+const SKY_TOP_ROOM = 44;
+
+function sameTransform(a, b) {
+  return Boolean(a && b) && a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+}
+
+class Sky {
+  constructor(root, scene) {
+    this.root = root;
+    this.scene = scene;
+    applyPalette(root, scene.palette, scene.font, scene.labelFont);
+    root.classList.toggle("record", isRecording());
+    this.uiScale = overlayScale(root);
+    root.classList.toggle("still", recordOption("still") !== null);
+    this.stage = element("div", "stage", root);
+    element("div", "brand", root).textContent = scene.brand;
+    this.hud = new SkyHud(root, scene);
+    this.loading = element("div", "loading", root);
+    this.loading.textContent = scene.loading;
+    this.clock = new Clock(scene.clock, 1, scene.key);
+    this.dock = element("div", "dock", root);
+    this.namesKey = `skillnet-names-${scene.key}`;
+    this.namesOn = readStore(this.namesKey) !== false;
+    const handlers = { risk: { on: false, set: (on) => this.setRisk(on) } };
+    if (scene.clumps && scene.clumps.items.length) handlers.names = { on: this.namesOn, set: (on) => this.setNames(on) };
+    this.legend = new SkyLegend(this.dock, scene.legend, handlers);
+    this.scrub = this.scrubber();
+    this.controls = new Controls(this.dock, this.clock, this);
+    this.table = toneTable();
+    loadSky(scene.data).then((data) => this.start(data), (error) => this.fail(error));
+  }
+
+  fail(error) {
+    this.loading.textContent = `${this.scene.failed} ${error.message}`;
+  }
+
+  start(data) {
+    this.data = data;
+    this.map = new StarMap(data);
+    this.ledger = new Ledger(data, this.map.count);
+    this.camera = new SkyCamera(this.map.size, `skillnet-view-${this.scene.key}`);
+    this.labels = new ClumpLabels(this.root, this.scene.clumps, this.scene.palette, this.uiScale, isRecording() ? [this.hud.element] : []);
+    this.labels.show(this.namesOn);
+    this.levels = { core: new Float32Array(this.map.count), glow: new Float32Array(this.map.count) };
+    this.surfaces = [1, MOTION_RATIO].map((ratio) => new Surface(this.stage, ratio, this));
+    this.painter = new EventPainter(data, this.map, this.ledger, this.scene.palette);
+    this.pointer = new SkyPointer(this);
+    this.pointer.update();
+    document.addEventListener("keydown", (event) => this.key(event));
+    new ResizeObserver(() => this.resize()).observe(this.root);
+  }
+
+  resize() {
+    const { width, height } = this.root.getBoundingClientRect();
+    for (const surface of this.surfaces) surface.resize(width, height, this.scene.palette);
+    this.root.style.setProperty("--dock", `${this.dock.offsetHeight}px`);
+    this.camera.fit(Math.round(width), Math.round(height), { top: SKY_TOP_ROOM, bottom: this.dock.offsetHeight });
+    this.transform = this.camera.transform();
+    this.use(this.surfaces[0]);
+    this.rebuild();
+    if (!this.running) this.run();
+  }
+
+  run() {
+    this.running = true;
+    this.loading.classList.add("done");
+    this.root.classList.add("ready");
+    if (!isRecording()) requestAnimationFrame((now) => this.frame(now));
+  }
+
+  rebuild() {
+    const hour = this.clock.t * WEEK_HOURS;
+    this.ledger.seek(hour);
+    const view = this.active.frame(this.transform);
+    this.active.stars.paint(view, this.ledger.held, true);
+    this.painter.setView(view);
+    this.relight();
+  }
+
+  frame(now) {
+    const seconds = this.last === undefined ? 0 : Math.min((now - this.last) / 1000, LONGEST_STEP);
+    this.last = now;
+    this.tick(seconds, now);
+    requestAnimationFrame((time) => this.frame(time));
+  }
+
+  tick(seconds, now) {
+    const advanced = this.clock.advance(seconds);
+    this.camera.step(seconds);
+    const transform = this.camera.transform();
+    if (!sameTransform(transform, this.transform)) this.turn(transform, now);
+    else if (this.active !== this.surfaces[0] && now - this.turnedAt > SKY_SETTLE_MS) this.settle();
+    this.travel(this.clock.t * WEEK_HOURS);
+    this.work();
+    if (advanced || this.dirty) this.present();
+    this.labels.update(this, now);
+    this.clock.save(now);
+    this.camera.save(now);
+  }
+
+  travel(hour) {
+    if (hour === this.ledger.hour) return;
+    if (hour < this.ledger.hour || hour - this.ledger.hour > LIGHT_WINDOW_HOURS) {
+      this.ledger.seek(hour);
+      this.active.stars.paint(this.active.frame(this.transform), this.ledger.held, true);
+      this.active.light.clear(this.clock.t);
+      this.dirty = true;
+      return this.relightLater();
+    }
+    this.active.light.renew(this.clock.t);
+    this.ledger.forward(hour, this.painter);
+    this.dirty = true;
+  }
+
+  present() {
+    this.active.present(this.active.light.gain(this.clock.t), this.table);
+    this.hud.update(this.clock.t);
+    this.controls.update(this.clock);
+    this.pointer.update();
+    this.dirty = false;
+  }
+
+  setNames(on) {
+    this.namesOn = on;
+    writeStore(this.namesKey, on);
+    if (this.labels) this.labels.show(on);
+  }
+
+  setRisk(on) {
+    this.root.classList.toggle("risky", on);
+    this.painter.risk = on;
+    if (this.active) this.relightLater();
+  }
+
+  describe(node) {
+    const { types, roles, field } = this.scene;
+    const kind = `${types[this.data.ntype[node]]}, ${this.data.nfield[node] ? field : roles[this.data.nrole[node]]}`;
+    const held = counted(this.ledger.held[node], "skill", "skills");
+    const passed = counted(this.ledger.passed[node], "copy", "copies");
+    return `${kind} · ${held} adopted · ${passed} copied onward${this.labels.describe(this.data.nclump[node])}`;
+  }
+}
+</script>
+<script>
+const SKY_STEPS = { ArrowLeft: -1, ArrowRight: 1 };
+
+const SkyPlayback = {
+  scrubber() {
+    return {
+      begin: (t) => {
+        this.resume = this.resume || this.clock.playing;
+        this.clock.playing = false;
+        this.seek(t);
+      },
+      move: (t) => this.seek(t),
+      end: () => {
+        this.clock.playing = Boolean(this.resume) && !this.clock.finished;
+        this.resume = false;
+        this.dirty = true;
+      },
+    };
+  },
+
+  seek(t) {
+    this.clock.seek(t);
+    this.dirty = true;
+  },
+
+  toggle() {
+    if (this.clock.finished) {
+      this.clock.seek(this.clock.start);
+      this.clock.playing = true;
+    } else {
+      this.clock.playing = !this.clock.playing;
+    }
+    this.dirty = true;
+  },
+
+  changeSpeed(speed) {
+    this.clock.speed = speed;
+    this.dirty = true;
+  },
+
+  key(event) {
+    if (event.target.closest("button, input")) return;
+    if (event.code === "Space") this.toggle();
+    else if (event.code in SKY_STEPS) this.seek(this.clock.t + SKY_STEPS[event.code]);
+    else return;
+    event.preventDefault();
+  },
+};
+
+Object.assign(Sky.prototype, SkyPlayback, SkyMotion, SkyRelight);
+</script>
+<script>
+const SkyColour = {
+  setColoured(on) {
+    this.scene.clumps.coloured = on;
+    if (!this.data) return;
+    for (const surface of this.surfaces) surface.stars.recolour(this.scene.clumps);
+    this.labels.recolour(on, this.scene.palette);
+    this.rebuild();
+  },
+};
+
+Object.assign(Sky.prototype, SkyColour);
+</script>
+<script>
+const SkyRecord = {
+  renderAt(t, view) {
+    this.virtual = (this.virtual || 0) + RECORD_STEP * 1000;
+    this.clock.playing = false;
+    this.clock.seek(t);
+    if (view) this.camera.hold(view);
+    this.dirty = true;
+    this.tick(RECORD_STEP, this.virtual);
+  },
+
+  reframe(transform) {
+    this.transform = transform;
+    this.rebuild();
+  },
+};
+
+Object.assign(Sky.prototype, SkyRecord);
+</script>
+<script>
+function bootSky() {
+  window.skyView = new Sky(document.getElementById("sky"), JSON.parse(document.getElementById("scene").textContent));
+}
+
+bootSky();
+</script>
+<button class="menu-toggle" aria-label="Open the menu" aria-expanded="false">
+<svg viewBox="0 0 20 20"><path d="M3 5h14M3 10h14M3 15h14"/></svg>
+</button>
+<nav class="menu" aria-label="Menu">
+<div class="menu-head">
+<a class="menu-brand" href="index.html"><svg class="menu-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Skill Constellations">
+  <defs>
+    <radialGradient id="logo-sky" cx="0.42" cy="0.45" r="0.75">
+      <stop offset="0" stop-color="#0C1426"/>
+      <stop offset="1" stop-color="#03050B"/>
+    </radialGradient>
+    <radialGradient id="logo-glow">
+      <stop offset="0" stop-color="#8DB3FF" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#8DB3FF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="1" y="1" width="62" height="62" rx="14" fill="url(#logo-sky)" stroke="#1D2538" stroke-width="1.5"/>
+  <g stroke="#7393DC" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M17 35.5 L30 19.5 L43 11.5"/>
+    <path d="M30 19.5 L46 23.5"/>
+    <path d="M17 35.5 L37 36.5 L50 41.5"/>
+    <path d="M17 35.5 L28 48.5 L41 52.5"/>
+  </g>
+  <g fill="url(#logo-glow)">
+    <circle cx="30" cy="19.5" r="6"/>
+    <circle cx="37" cy="36.5" r="6"/>
+    <circle cx="28" cy="48.5" r="5.5"/>
+    <circle cx="43" cy="11.5" r="4.5"/>
+    <circle cx="46" cy="23.5" r="4.5"/>
+    <circle cx="50" cy="41.5" r="4.5"/>
+    <circle cx="41" cy="52.5" r="4"/>
+  </g>
+  <g fill="#F5F7FF">
+    <circle cx="30" cy="19.5" r="2.7"/>
+    <circle cx="37" cy="36.5" r="2.7"/>
+    <circle cx="28" cy="48.5" r="2.4"/>
+    <circle cx="43" cy="11.5" r="2"/>
+    <circle cx="46" cy="23.5" r="2"/>
+    <circle cx="50" cy="41.5" r="2"/>
+    <circle cx="41" cy="52.5" r="1.8"/>
+  </g>
+  <circle cx="17" cy="35.5" r="5.4" fill="#03050B" stroke="#F2C35A" stroke-width="2"/>
+  <circle cx="17" cy="35.5" r="2.5" fill="#F5F7FF"/>
+</svg>
+<span>Skill Constellations</span></a>
+<button class="menu-close" aria-label="Close the menu">
+<svg viewBox="0 0 20 20"><path d="M5 5l10 10M15 5L5 15"/></svg>
+</button>
+</div>
+<a class="menu-link" href="index.html">Repository network</a>
+<section class="menu-section">
+<h2>Skill constellation</h2>
+<select class="menu-picker" aria-label="Skill"><option value="" disabled hidden selected>Choose a skill</option><optgroup label="Most adopted"><option value="skills/frontend-design.html">frontend-design</option><option value="skills/skill-creator.html">skill-creator</option><option value="skills/brainstorming.html">brainstorming</option><option value="skills/ui-ux-pro-max.html">ui-ux-pro-max</option><option value="skills/vercel-react-best-practices.html">vercel-react-best-practices</option><option value="skills/systematic-debugging.html">systematic-debugging</option><option value="skills/pdf.html">pdf</option><option value="skills/test-driven-development.html">test-driven-development</option><option value="skills/mcp-builder.html">mcp-builder</option><option value="skills/writing-plans.html">writing-plans</option><option value="skills/xlsx.html">xlsx</option><option value="skills/subagent-driven-development.html">subagent-driven-development</option><option value="skills/verification-before-completion.html">verification-before-completion</option><option value="skills/writing-skills.html">writing-skills</option><option value="skills/dispatching-parallel-agents.html">dispatching-parallel-agents</option><option value="skills/docx.html">docx</option><option value="skills/pptx.html">pptx</option><option value="skills/agent-browser.html">agent-browser</option><option value="skills/grill-me.html">grill-me</option><option value="skills/webapp-testing.html">webapp-testing</option><option value="skills/using-git-worktrees.html">using-git-worktrees</option><option value="skills/executing-plans.html">executing-plans</option><option value="skills/requesting-code-review.html">requesting-code-review</option><option value="skills/receiving-code-review.html">receiving-code-review</option><option value="skills/web-design-guidelines.html">web-design-guidelines</option><option value="skills/openspec-apply-change.html">openspec-apply-change</option><option value="skills/openspec-explore.html">openspec-explore</option><option value="skills/find-skills.html">find-skills</option><option value="skills/finishing-a-development-branch.html">finishing-a-development-branch</option><option value="skills/openspec-archive-change.html">openspec-archive-change</option></optgroup><optgroup label="Most adopted high-risk"><option value="skills/frontend-design.html">frontend-design</option><option value="skills/skill-creator.html">skill-creator</option><option value="skills/brainstorming.html">brainstorming</option><option value="skills/ui-ux-pro-max.html">ui-ux-pro-max</option><option value="skills/systematic-debugging.html">systematic-debugging</option><option value="skills/pdf.html">pdf</option><option value="skills/test-driven-development.html">test-driven-development</option><option value="skills/mcp-builder.html">mcp-builder</option><option value="skills/writing-plans.html">writing-plans</option><option value="skills/xlsx.html">xlsx</option><option value="skills/subagent-driven-development.html">subagent-driven-development</option><option value="skills/verification-before-completion.html">verification-before-completion</option><option value="skills/writing-skills.html">writing-skills</option><option value="skills/dispatching-parallel-agents.html">dispatching-parallel-agents</option><option value="skills/docx.html">docx</option><option value="skills/pptx.html">pptx</option><option value="skills/agent-browser.html">agent-browser</option><option value="skills/grill-me.html">grill-me</option><option value="skills/webapp-testing.html">webapp-testing</option><option value="skills/using-git-worktrees.html">using-git-worktrees</option><option value="skills/executing-plans.html">executing-plans</option><option value="skills/requesting-code-review.html">requesting-code-review</option><option value="skills/receiving-code-review.html">receiving-code-review</option><option value="skills/openspec-apply-change.html">openspec-apply-change</option><option value="skills/find-skills.html">find-skills</option><option value="skills/finishing-a-development-branch.html">finishing-a-development-branch</option><option value="skills/openspec-archive-change.html">openspec-archive-change</option><option value="skills/improve-codebase-architecture.html">improve-codebase-architecture</option><option value="skills/shadcn.html">shadcn</option><option value="skills/canvas-design.html">canvas-design</option></optgroup></select>
+</section>
+<section class="menu-section"><h2>Display</h2><button class="menu-switch" data-toggle="names" aria-pressed="false">Cluster names</button><button class="menu-switch" data-toggle="colour" aria-pressed="false">Colour by cluster</button></section>
+<div class="menu-links">
+<a href="https://github.com/FahdSeddik/Skill-Constellations" target="_blank" rel="noopener">GitHub repository</a>
+<a href="https://github.com/FahdSeddik/Skill-Constellations/releases/tag/data-v1.0" target="_blank" rel="noopener">Data</a>
+</div>
+</nav>
+<script>
+const MENU_KEY = "skillnet-menu";
+const MENU_WIDE = window.matchMedia("(min-width: 721px)");
+
+function setMenu(open, remember) {
+  document.body.classList.toggle("menu-open", open);
+  document.querySelector(".menu-toggle").setAttribute("aria-expanded", String(open));
+  if (remember && MENU_WIDE.matches) writeStore(MENU_KEY, open);
+}
+
+function bindSwitch(button, apply) {
+  button.addEventListener("click", () => {
+    const on = button.getAttribute("aria-pressed") !== "true";
+    button.setAttribute("aria-pressed", String(on));
+    apply(on);
+  });
+}
+
+function bindSky(sky) {
+  const names = document.querySelector('[data-toggle="names"]');
+  const colour = document.querySelector('[data-toggle="colour"]');
+  if (!names || !colour) return;
+  names.setAttribute("aria-pressed", String(sky.namesOn));
+  colour.setAttribute("aria-pressed", String(sky.scene.clumps.coloured));
+  bindSwitch(names, (on) => sky.setNames(on));
+  bindSwitch(colour, (on) => sky.setColoured(on));
+}
+
+function bindMenu() {
+  setMenu(MENU_WIDE.matches && !isRecording() && readStore(MENU_KEY) !== false, false);
+  document.querySelector(".menu-toggle").addEventListener("click", () => setMenu(true, true));
+  document.querySelector(".menu-close").addEventListener("click", () => setMenu(false, true));
+  document.querySelector(".menu-picker").addEventListener("change", (event) => {
+    window.location.href = event.target.value;
+  });
+  if (window.skyView) bindSky(window.skyView);
+}
+
+bindMenu();
+</script></body>
+</html>
