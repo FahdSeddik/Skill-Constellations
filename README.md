@@ -3,9 +3,13 @@
 </p>
 
 <p align="center">
+  <a href="https://arxiv.org/abs/2610.11169"><b>Paper</b></a>
+  &nbsp;&middot;&nbsp;
   <a href="https://fahdseddik.github.io/Skill-Constellations/"><b>Viewer</b></a>
   &nbsp;&middot;&nbsp;
   <a href="https://github.com/FahdSeddik/Skill-Constellations/releases/tag/data-v1.0"><b>Data release</b></a>
+  &nbsp;&middot;&nbsp;
+  <a href="https://huggingface.co/datasets/FahdSeddik/skill-constellations"><b>Hugging Face</b></a>
   &nbsp;&middot;&nbsp;
   <a href="#running-the-viewer-locally"><b>Running the viewer locally</b></a>
 </p>
@@ -75,10 +79,27 @@ Every table is stored as Parquet, and every table except `history` is also store
 | `copy_events` | 18,282 | Commit that adds ten or more skills, where one earlier adopter, the source, already held at least half of the existing lineages |
 | `transmissions` | 644,626 | Lineage in a copy event whose source held it first |
 
+The same tables are on Hugging Face as [FahdSeddik/skill-constellations](https://huggingface.co/datasets/FahdSeddik/skill-constellations), where the `datasets` library loads each one by name.
 The release README holds the data dictionary, row counts and checksums.
 No author name, email address or commit message is included, and lineages holding a confirmed malicious skill are withheld.
 The viewer tables in `ui/data/` hold no repository identifier.
 Please cite GitSkills for the underlying snapshot when you use the data.
+
+## Citation
+
+If you use the data or the viewer, please cite the paper and GitSkills.
+
+```bibtex
+@misc{seddik2026skillconstellations,
+  title         = {Skill Constellations: Tracing the Supply Chain of Agent Skills on {GitHub}},
+  author        = {Seddik, Fahd},
+  year          = {2026},
+  eprint        = {2610.11169},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.SE},
+  url           = {https://arxiv.org/abs/2610.11169}
+}
+```
 
 ## Licenses
 
